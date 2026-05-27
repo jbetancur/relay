@@ -1,0 +1,10 @@
+node_modules/
+frontend/dist/
+.env
+*.local
+
+# Go binaries
+backend/server
+
+# OS
+.DS_Store

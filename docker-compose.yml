@@ -1,0 +1,46 @@
+services:
+  vision:
+    build: .
+    ports:
+      - "3000:80"
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-https://api.openai.com}
+      API_KEY: ${API_KEY:-}
+      DB_PATH: /data/vision.db
+    volumes:
+      - vision_data:/data
+    restart: unless-stopped
+
+  # Local dev: run frontend and backend separately for HMR
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    command: npm run dev -- --host
+    environment:
+      NODE_ENV: development
+    profiles: [dev]
+
+  backend:
+    image: golang:1.26-alpine
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - backend_data:/data
+    ports:
+      - "8080:8080"
+    command: go run ./cmd/server
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-https://api.openai.com}
+      API_KEY: ${API_KEY:-}
+      DB_PATH: /data/vision.db
+      PORT: "8080"
+    profiles: [dev]
+
+volumes:
+  vision_data:
+  backend_data:

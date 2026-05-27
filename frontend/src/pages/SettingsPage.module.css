@@ -1,0 +1,12 @@
+.root {
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--mantine-spacing-xl);
+  overflow-y: auto;
+}
+
+.inner {
+  width: 100%;
+  max-width: 560px;
+}

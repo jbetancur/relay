@@ -1,0 +1,63 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+}
+
+.topbar {
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-md);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  flex-shrink: 0;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.chatColumn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  min-width: 0;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  padding: var(--mantine-spacing-md) 0;
+}
+
+.scrollBtn {
+  position: absolute;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  box-shadow: var(--mantine-shadow-md);
+  opacity: 0.9;
+}
+
+.scrollBtn:hover {
+  opacity: 1;
+}
+
+.suggestion {
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+  background: var(--mantine-color-default);
+  transition: background 120ms ease, border-color 120ms ease;
+  cursor: pointer;
+}
+
+.suggestion:hover {
+  background: var(--mantine-color-dark-6);
+}

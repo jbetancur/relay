@@ -1,0 +1,12 @@
+.root {
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
+.textarea {
+  flex: 1;
+}
+
+.textarea textarea {
+  border-radius: var(--mantine-radius-lg);
+  resize: none;
+}

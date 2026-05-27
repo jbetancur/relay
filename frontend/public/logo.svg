@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <radialGradient id="nodeGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#cba6f7"/>
+      <stop offset="100%" stop-color="#89b4fa"/>
+    </radialGradient>
+    <radialGradient id="glowGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#cba6f7" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#cba6f7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="arcGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#89b4fa"/>
+      <stop offset="100%" stop-color="#cba6f7"/>
+    </linearGradient>
+    <linearGradient id="arcGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#89dceb"/>
+      <stop offset="100%" stop-color="#89b4fa"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softglow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Ambient glow behind the whole mark -->
+  <circle cx="100" cy="100" r="68" fill="url(#glowGrad)"/>
+
+  <!-- Outer arc pair (largest) -->
+  <path d="M 42 58 A 72 72 0 0 1 158 58"
+        stroke="url(#arcGrad1)" stroke-width="3.5" stroke-linecap="round" opacity="0.45"/>
+  <path d="M 42 142 A 72 72 0 0 0 158 142"
+        stroke="url(#arcGrad1)" stroke-width="3.5" stroke-linecap="round" opacity="0.45"/>
+
+  <!-- Mid arc pair -->
+  <path d="M 55 67 A 52 52 0 0 1 145 67"
+        stroke="url(#arcGrad2)" stroke-width="3" stroke-linecap="round" opacity="0.65"/>
+  <path d="M 55 133 A 52 52 0 0 0 145 133"
+        stroke="url(#arcGrad2)" stroke-width="3" stroke-linecap="round" opacity="0.65"/>
+
+  <!-- Inner arc pair (closest to node) -->
+  <path d="M 70 79 A 32 32 0 0 1 130 79"
+        stroke="url(#arcGrad1)" stroke-width="2.5" stroke-linecap="round" opacity="0.85" filter="url(#glow)"/>
+  <path d="M 70 121 A 32 32 0 0 0 130 121"
+        stroke="url(#arcGrad1)" stroke-width="2.5" stroke-linecap="round" opacity="0.85" filter="url(#glow)"/>
+
+  <!-- Central relay node -->
+  <circle cx="100" cy="100" r="13" fill="url(#nodeGrad)" filter="url(#softglow)"/>
+  <circle cx="100" cy="100" r="8" fill="#cdd6f4" opacity="0.95"/>
+</svg>

@@ -1,0 +1,81 @@
+.panel {
+  width: 480px;
+  min-width: 320px;
+  max-width: 50vw;
+  flex-shrink: 0;
+  border-left: 1px solid var(--mantine-color-default-border);
+  display: flex;
+  flex-direction: column;
+  background: var(--mantine-color-body);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  padding: 8px var(--mantine-spacing-md);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  flex-shrink: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--mantine-radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 160px;
+  color: var(--mantine-color-dimmed);
+  background: transparent;
+  border: none;
+  transition: background 100ms, color 100ms;
+}
+
+.tab[data-active='true'] {
+  background: color-mix(in srgb, var(--mantine-color-violet-filled) 18%, transparent);
+  color: var(--mantine-color-text);
+}
+
+.tab:hover:not([data-active='true']) {
+  background: var(--mantine-color-default-hover);
+  color: var(--mantine-color-text);
+}
+
+.tabLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: white;
+}
+
+.previewToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--mantine-spacing-xs);
+  padding: 4px var(--mantine-spacing-sm);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  flex-shrink: 0;
+}

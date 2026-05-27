@@ -1,0 +1,138 @@
+.row {
+  display: flex;
+  gap: var(--mantine-spacing-sm);
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-md);
+  align-items: flex-start;
+}
+
+.row[data-role='user'] {
+  flex-direction: row-reverse;
+}
+
+.bubble {
+  max-width: 72%;
+  position: relative;
+}
+
+.bubble[data-role='user'] {
+  background: var(--mantine-primary-color-filled);
+  color: var(--mantine-primary-color-contrast);
+  border-radius: var(--mantine-radius-lg);
+  border-bottom-right-radius: 4px;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+}
+
+.bubble[data-role='assistant'] {
+  background: var(--mantine-color-default);
+  border-radius: var(--mantine-radius-lg);
+  border-bottom-left-radius: 4px;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+}
+
+.markdown {
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.6;
+}
+
+.markdown p {
+  margin: 0 0 var(--mantine-spacing-xs);
+}
+
+.markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.codeBlock {
+  margin: var(--mantine-spacing-sm) 0;
+  border-radius: var(--mantine-radius-sm);
+  overflow: hidden;
+  border: 1px solid #313244; /* Mocha surface0 border */
+}
+
+.codeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: #181825; /* Mocha mantle */
+  border-bottom: 1px solid #313244;
+  min-height: 28px;
+}
+
+.langBadge {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: #313244 !important;
+  color: #cba6f7 !important; /* Mocha mauve */
+}
+
+.codeCopyBtn {
+  opacity: 0.6;
+  transition: opacity 100ms;
+}
+
+.codeCopyBtn:hover {
+  opacity: 1;
+}
+
+.codePre {
+  margin: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.codePre code {
+  display: block;
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  background: #1e1e2e; /* Mocha base — always */
+  color: #cdd6f4;      /* Mocha text */
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+  font-size: 0.85em;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.inlineCode {
+  background: #45475a; /* Mocha surface1 — always */
+  color: #fab387;      /* Mocha peach */
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+}
+
+.markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: var(--mantine-spacing-xs) 0;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--mantine-color-default-border);
+  padding: 6px 12px;
+  font-size: var(--mantine-font-size-sm);
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--mantine-primary-color-filled);
+  margin: var(--mantine-spacing-xs) 0;
+  padding-left: var(--mantine-spacing-sm);
+  color: var(--mantine-color-dimmed);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 100ms;
+}
+
+.bubble:hover .actions {
+  opacity: 1;
+}
