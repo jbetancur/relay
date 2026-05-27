@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS connections (
 	created_at  INTEGER NOT NULL,
 	updated_at  INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS connection_stats (
+	connection_id    TEXT PRIMARY KEY REFERENCES connections(id) ON DELETE CASCADE,
+	request_count    INTEGER NOT NULL DEFAULT 0,
+	prompt_tokens    INTEGER NOT NULL DEFAULT 0,
+	completion_tokens INTEGER NOT NULL DEFAULT 0,
+	updated_at       INTEGER NOT NULL DEFAULT 0
+);
 `
 
 func Open(path string) (*sql.DB, error) {

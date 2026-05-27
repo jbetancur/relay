@@ -13,6 +13,7 @@ import (
 	"github.com/johnbetancur/vision/backend/internal/db"
 	"github.com/johnbetancur/vision/backend/internal/middleware"
 	"github.com/johnbetancur/vision/backend/internal/proxy"
+	"github.com/johnbetancur/vision/backend/internal/usage"
 )
 
 func main() {
@@ -28,7 +29,8 @@ func main() {
 	defer database.Close()
 
 	connStore := connections.NewStore(database)
-	connHandler := connections.NewHandler(connStore)
+	usageStore := usage.NewStore(database)
+	connHandler := connections.NewHandler(connStore, usageStore)
 
 	// Seed a default connection from env vars on first startup.
 	if apiBase := os.Getenv("API_BASE_URL"); apiBase != "" {
@@ -56,9 +58,11 @@ func main() {
 		r.Put("/api/connections/{id}", connHandler.Update)
 		r.Delete("/api/connections/{id}", connHandler.Delete)
 		r.Get("/api/connections/{id}/models", connHandler.Models)
+		r.Get("/api/connections/{id}/stats", connHandler.GetStats)
+		r.Delete("/api/connections/{id}/stats", connHandler.ResetStats)
 
 		// Wildcard proxy for all other /api/* traffic.
-		r.Handle("/api/*", proxy.New(cfg, connStore))
+		r.Handle("/api/*", proxy.New(cfg, connStore, usageStore))
 	})
 
 	log.Printf("relay backend listening on :%s", cfg.Port)

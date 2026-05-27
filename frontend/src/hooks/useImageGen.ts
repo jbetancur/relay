@@ -23,6 +23,8 @@ export function useImageGen(connectionId?: string | null) {
     setGenerating(true)
     try {
       const model = params.model || settings.defaultImageModel
+      const isDallE3 = model === 'dall-e-3'
+      const isGptImage = model.startsWith('gpt-image')
       const res = await api.images.generate(
         {
           model,
@@ -30,22 +32,29 @@ export function useImageGen(connectionId?: string | null) {
           n: params.n,
           size: params.size,
           quality: params.quality,
-          style: params.style,
-          response_format: 'url',
+          ...(isDallE3 && { style: params.style }),
+          ...(!isGptImage && { response_format: 'url' }),
         },
         connectionId
       )
 
-      const images: GeneratedImage[] = res.data.map((item) => ({
-        id: Math.random().toString(36).slice(2),
-        prompt: params.prompt,
-        model,
-        url: item.url,
-        revisedPrompt: item.revised_prompt,
-        createdAt: Date.now(),
-        size: params.size,
-        quality: params.quality,
-      }))
+      const images: GeneratedImage[] = res.data.map((item) => {
+        const src = item.url
+          ? item.url
+          : item.b64_json
+          ? `data:image/png;base64,${item.b64_json}`
+          : undefined
+        return {
+          id: Math.random().toString(36).slice(2),
+          prompt: params.prompt,
+          model,
+          url: src,
+          revisedPrompt: item.revised_prompt,
+          createdAt: Date.now(),
+          size: params.size,
+          quality: params.quality,
+        }
+      })
 
       images.forEach(addImage)
       return images

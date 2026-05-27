@@ -8,10 +8,13 @@ import {
   Tooltip,
   Stack,
   Switch,
+  Divider,
+  SimpleGrid,
 } from '@mantine/core'
-import { IconPencil, IconTrash, IconPlugConnected } from '@tabler/icons-react'
+import { IconPencil, IconTrash, IconPlugConnected, IconRefresh } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import type { Connection } from '@/types'
+import { useConnectionStats } from '@/hooks/useConnectionStats'
 
 const TYPE_COLORS: Record<string, string> = {
   openai: 'teal',
@@ -25,6 +28,41 @@ const TYPE_LABELS: Record<string, string> = {
   ollama: 'Ollama',
   anthropic: 'Anthropic',
   custom: 'Custom',
+}
+
+// Blended estimate: ~$1.50/1M prompt + $2.00/1M completion (approximate GPT-3.5 tier)
+const PROMPT_COST_PER_TOKEN = 1.5 / 1_000_000
+const COMPLETION_COST_PER_TOKEN = 2.0 / 1_000_000
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(n)
+}
+
+function estimateCost(promptTokens: number, completionTokens: number): string {
+  const cost = promptTokens * PROMPT_COST_PER_TOKEN + completionTokens * COMPLETION_COST_PER_TOKEN
+  if (cost < 0.001) return '<$0.001'
+  if (cost < 1) return `$${cost.toFixed(3)}`
+  return `$${cost.toFixed(2)}`
+}
+
+interface StatCellProps {
+  label: string
+  value: string
+}
+
+function StatCell({ label, value }: StatCellProps) {
+  return (
+    <Stack gap={1}>
+      <Text size="xs" c="dimmed" lh={1.2}>
+        {label}
+      </Text>
+      <Text size="xs" fw={600} lh={1.2}>
+        {value}
+      </Text>
+    </Stack>
+  )
 }
 
 interface ConnectionCardProps {
@@ -41,6 +79,9 @@ export function ConnectionCard({
   onToggleEnabled,
 }: ConnectionCardProps) {
   const [testing, setTesting] = useState(false)
+  const { stats, loading: statsLoading, refresh, reset } = useConnectionStats(connection.id)
+
+  const hasStats = stats !== null && stats.requestCount > 0
 
   async function handleTest() {
     setTesting(true)
@@ -63,6 +104,15 @@ export function ConnectionCard({
     } finally {
       setTesting(false)
     }
+  }
+
+  async function handleReset() {
+    await reset()
+    notifications.show({
+      color: 'gray',
+      title: 'Stats cleared',
+      message: `Usage stats for ${connection.name} have been reset`,
+    })
   }
 
   return (
@@ -124,6 +174,42 @@ export function ConnectionCard({
           </Tooltip>
         </Group>
       </Group>
+
+      {/* Usage stats */}
+      {!statsLoading && (
+        <>
+          <Divider my="xs" />
+          {hasStats ? (
+            <Group justify="space-between" align="flex-end">
+              <SimpleGrid cols={4} spacing="xs" style={{ flex: 1 }}>
+                <StatCell label="Requests" value={String(stats.requestCount)} />
+                <StatCell label="Prompt tkns" value={formatTokens(stats.promptTokens)} />
+                <StatCell label="Completion tkns" value={formatTokens(stats.completionTokens)} />
+                <StatCell
+                  label="Est. cost~"
+                  value={estimateCost(stats.promptTokens, stats.completionTokens)}
+                />
+              </SimpleGrid>
+              <Group gap={4} style={{ flexShrink: 0 }}>
+                <Tooltip label="Refresh stats">
+                  <ActionIcon variant="subtle" size="xs" color="gray" onClick={refresh}>
+                    <IconRefresh size={11} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="Reset stats">
+                  <ActionIcon variant="subtle" size="xs" color="red" onClick={handleReset}>
+                    <IconTrash size={11} />
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
+            </Group>
+          ) : (
+            <Text size="xs" c="dimmed">
+              No usage recorded yet
+            </Text>
+          )}
+        </>
+      )}
     </Card>
   )
 }

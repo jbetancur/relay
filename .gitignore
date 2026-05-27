@@ -6,5 +6,10 @@ frontend/dist/
 # Go binaries
 backend/server
 
+# SQLite databases (runtime data)
+*.db
+*.db-shm
+*.db-wal
+
 # OS
 .DS_Store

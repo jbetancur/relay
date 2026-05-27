@@ -32,20 +32,37 @@ import { ModelSwitcher } from '@/components/chat/ModelSwitcher'
 import type { ImageSize, ImageQuality, ImageStyle } from '@/types'
 import classes from './ImagePage.module.css'
 
-const SIZE_OPTIONS: { value: ImageSize; label: string }[] = [
+const SIZE_OPTIONS_GPT: { value: ImageSize; label: string }[] = [
+  { value: '1024x1024', label: '1024 × 1024 (square)' },
+  { value: '1536x1024', label: '1536 × 1024 (landscape)' },
+  { value: '1024x1536', label: '1024 × 1536 (portrait)' },
+]
+
+const SIZE_OPTIONS_DALLE3: { value: ImageSize; label: string }[] = [
   { value: '1024x1024', label: '1024 × 1024 (square)' },
   { value: '1792x1024', label: '1792 × 1024 (landscape)' },
   { value: '1024x1792', label: '1024 × 1792 (portrait)' },
+]
+
+const SIZE_OPTIONS_DALLE2: { value: ImageSize; label: string }[] = [
+  { value: '1024x1024', label: '1024 × 1024' },
   { value: '512x512', label: '512 × 512' },
   { value: '256x256', label: '256 × 256' },
 ]
 
-const QUALITY_OPTIONS: { value: ImageQuality; label: string }[] = [
+const QUALITY_OPTIONS_GPT: { value: ImageQuality; label: string }[] = [
   { value: 'auto', label: 'Auto' },
   { value: 'high', label: 'High' },
   { value: 'medium', label: 'Medium' },
   { value: 'low', label: 'Low' },
+]
+
+const QUALITY_OPTIONS_DALLE3: { value: ImageQuality; label: string }[] = [
   { value: 'hd', label: 'HD' },
+  { value: 'standard', label: 'Standard' },
+]
+
+const QUALITY_OPTIONS_DALLE2: { value: ImageQuality; label: string }[] = [
   { value: 'standard', label: 'Standard' },
 ]
 
@@ -53,6 +70,12 @@ const STYLE_OPTIONS: { value: ImageStyle; label: string }[] = [
   { value: 'vivid', label: 'Vivid' },
   { value: 'natural', label: 'Natural' },
 ]
+
+function getModelFamily(model: string): 'gpt-image' | 'dall-e-3' | 'dall-e-2' {
+  if (model.startsWith('gpt-image')) return 'gpt-image'
+  if (model === 'dall-e-3') return 'dall-e-3'
+  return 'dall-e-2'
+}
 
 interface ImagePageProps {
   onToggleSidebar: () => void
@@ -68,6 +91,24 @@ export function ImagePage({ onToggleSidebar }: ImagePageProps) {
   const [quality, setQuality] = useState<ImageQuality>('auto')
   const [style, setStyle] = useState<ImageStyle>('vivid')
   const [n, setN] = useState<number>(1)
+
+  const modelFamily = getModelFamily(model)
+  const sizeOptions =
+    modelFamily === 'gpt-image' ? SIZE_OPTIONS_GPT :
+    modelFamily === 'dall-e-3' ? SIZE_OPTIONS_DALLE3 :
+    SIZE_OPTIONS_DALLE2
+  const qualityOptions =
+    modelFamily === 'gpt-image' ? QUALITY_OPTIONS_GPT :
+    modelFamily === 'dall-e-3' ? QUALITY_OPTIONS_DALLE3 :
+    QUALITY_OPTIONS_DALLE2
+
+  function handleModelChange(m: string) {
+    setModel(m)
+    const family = getModelFamily(m)
+    setQuality(family === 'gpt-image' ? 'auto' : family === 'dall-e-3' ? 'hd' : 'standard')
+    setSize('1024x1024')
+    setN(1)
+  }
 
   const { generate, generating, error } = useImageGen(connectionId)
   const { images, deleteImage } = useImageGalleryStore()
@@ -111,7 +152,7 @@ export function ImagePage({ onToggleSidebar }: ImagePageProps) {
                   size="sm"
                 />
               )}
-              <ModelSwitcher value={model} onChange={setModel} group="image" connectionId={connectionId} />
+              <ModelSwitcher value={model} onChange={handleModelChange} group="image" connectionId={connectionId} />
 
               <Textarea
                 label="Prompt"
@@ -125,32 +166,36 @@ export function ImagePage({ onToggleSidebar }: ImagePageProps) {
 
               <Select
                 label="Size"
-                data={SIZE_OPTIONS}
+                data={sizeOptions}
                 value={size}
                 onChange={(v) => v && setSize(v as ImageSize)}
               />
 
               <Select
                 label="Quality"
-                data={QUALITY_OPTIONS}
+                data={qualityOptions}
                 value={quality}
                 onChange={(v) => v && setQuality(v as ImageQuality)}
               />
 
-              <Select
-                label="Style"
-                data={STYLE_OPTIONS}
-                value={style}
-                onChange={(v) => v && setStyle(v as ImageStyle)}
-              />
+              {modelFamily === 'dall-e-3' && (
+                <Select
+                  label="Style"
+                  data={STYLE_OPTIONS}
+                  value={style}
+                  onChange={(v) => v && setStyle(v as ImageStyle)}
+                />
+              )}
 
-              <NumberInput
-                label="Number of images"
-                value={n}
-                onChange={(v) => setN(Number(v))}
-                min={1}
-                max={4}
-              />
+              {modelFamily !== 'dall-e-3' && (
+                <NumberInput
+                  label="Number of images"
+                  value={n}
+                  onChange={(v) => setN(Number(v))}
+                  min={1}
+                  max={4}
+                />
+              )}
 
               {error && (
                 <Alert icon={<IconAlertCircle size={14} />} color="red">

@@ -23,6 +23,15 @@ export interface ConnectionInput {
   isDefault: boolean
 }
 
+export interface ConnectionStats {
+  connectionId: string
+  requestCount: number
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  updatedAt: number
+}
+
 // ── Conversations ─────────────────────────────────────────────────────────────
 
 export type Role = 'user' | 'assistant' | 'system'
@@ -100,6 +109,8 @@ export type ImageSize =
   | '1024x1024'
   | '1792x1024'
   | '1024x1792'
+  | '1536x1024'
+  | '1024x1536'
 
 export type ImageQuality = 'standard' | 'hd' | 'low' | 'medium' | 'high' | 'auto'
 export type ImageStyle = 'vivid' | 'natural'
@@ -112,6 +123,7 @@ export interface ImageGenerationRequest {
   quality?: ImageQuality
   style?: ImageStyle
   response_format?: 'url' | 'b64_json'
+  output_format?: 'png' | 'jpeg' | 'webp'
 }
 
 export interface GeneratedImage {

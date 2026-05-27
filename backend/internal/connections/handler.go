@@ -8,14 +8,16 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/johnbetancur/vision/backend/internal/usage"
 )
 
 type Handler struct {
-	store *Store
+	store      *Store
+	usageStore *usage.Store
 }
 
-func NewHandler(store *Store) *Handler {
-	return &Handler{store: store}
+func NewHandler(store *Store, usageStore *usage.Store) *Handler {
+	return &Handler{store: store, usageStore: usageStore}
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -136,4 +138,23 @@ func (h *Handler) Models(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
+}
+
+func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	stats, err := h.usageStore.Get(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (h *Handler) ResetStats(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.usageStore.Reset(id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
