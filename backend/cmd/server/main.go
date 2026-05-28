@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -17,14 +17,19 @@ import (
 )
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(logger)
+
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config error: %v", err)
+		slog.Error("config error", "err", err)
+		os.Exit(1)
 	}
 
 	database, err := db.Open(cfg.DBPath)
 	if err != nil {
-		log.Fatalf("db error: %v", err)
+		slog.Error("db error", "err", err)
+		os.Exit(1)
 	}
 	defer database.Close()
 
@@ -32,10 +37,9 @@ func main() {
 	usageStore := usage.NewStore(database)
 	connHandler := connections.NewHandler(connStore, usageStore)
 
-	// Seed a default connection from env vars on first startup.
 	if apiBase := os.Getenv("API_BASE_URL"); apiBase != "" {
 		if err := connStore.Seed("Default", cfg.APIBaseURL, cfg.APIKey); err != nil {
-			log.Printf("seed warning: %v", err)
+			slog.Warn("seed warning", "err", err)
 		}
 	}
 
@@ -51,7 +55,6 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth)
 
-		// Connection CRUD — registered before the wildcard proxy.
 		r.Get("/api/connections", connHandler.List)
 		r.Post("/api/connections", connHandler.Create)
 		r.Get("/api/connections/{id}", connHandler.Get)
@@ -61,12 +64,12 @@ func main() {
 		r.Get("/api/connections/{id}/stats", connHandler.GetStats)
 		r.Delete("/api/connections/{id}/stats", connHandler.ResetStats)
 
-		// Wildcard proxy for all other /api/* traffic.
 		r.Handle("/api/*", proxy.New(cfg, connStore, usageStore))
 	})
 
-	log.Printf("relay backend listening on :%s", cfg.Port)
+	slog.Info("relay backend listening", "port", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
-		log.Fatalf("server error: %v", err)
+		slog.Error("server error", "err", err)
+		os.Exit(1)
 	}
 }

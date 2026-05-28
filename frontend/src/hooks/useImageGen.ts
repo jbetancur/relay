@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { api } from '@/lib/api'
 import { useImageGalleryStore, useSettingsStore } from '@/store'
-import type { ImageSize, ImageQuality, ImageStyle, GeneratedImage } from '@/types'
+import type { ImageSize, ImageQuality, GeneratedImage } from '@/types'
 
 export interface ImageGenParams {
   prompt: string
   model: string
   size: ImageSize
   quality: ImageQuality
-  style: ImageStyle
   n: number
 }
 
@@ -23,7 +22,6 @@ export function useImageGen(connectionId?: string | null) {
     setGenerating(true)
     try {
       const model = params.model || settings.defaultImageModel
-      const isDallE3 = model === 'dall-e-3'
       const isGptImage = model.startsWith('gpt-image')
       const res = await api.images.generate(
         {
@@ -32,7 +30,6 @@ export function useImageGen(connectionId?: string | null) {
           n: params.n,
           size: params.size,
           quality: params.quality,
-          ...(isDallE3 && { style: params.style }),
           ...(!isGptImage && { response_format: 'url' }),
         },
         connectionId

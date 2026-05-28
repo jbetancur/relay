@@ -12,7 +12,7 @@ function randomId() {
 
 interface ConversationState {
   conversations: Conversation[]
-  createConversation: () => Conversation
+  createConversation: (model?: string) => Conversation
   deleteConversation: (id: string) => void
   renameConversation: (id: string, title: string) => void
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'createdAt'>) => Message
@@ -30,12 +30,12 @@ export const useConversationStore = create<ConversationState>()(
     (set, get) => ({
       conversations: [],
 
-      createConversation() {
+      createConversation(model = '') {
         const conv: Conversation = {
           id: randomId(),
           title: 'New conversation',
           messages: [],
-          model: '',
+          model,
           systemPrompt: '',
           connectionId: null,
           createdAt: Date.now(),

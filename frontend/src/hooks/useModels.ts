@@ -4,7 +4,6 @@ import type { GroupedModels, Model } from '@/types'
 
 const IMAGE_MODEL_PATTERNS = ['dall-e', 'gpt-image', 'stable-diffusion', 'flux', 'imagen']
 
-// Models known to accept image inputs (multimodal). Checked by substring.
 const VISION_MODEL_PATTERNS = [
   'gpt-4o', 'gpt-4-turbo', 'gpt-4-vision',
   'claude-3', 'claude-4',
@@ -29,9 +28,9 @@ export function useModels(connectionId?: string | null) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (connectionId === null) return
     let cancelled = false
     setLoading(true)
-    setGrouped({ chat: [], image: [] })
     api.models
       .list(connectionId)
       .then((res) => {
@@ -51,9 +50,7 @@ export function useModels(connectionId?: string | null) {
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [connectionId])
 
   return { grouped, loading, error }

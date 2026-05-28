@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -16,7 +16,6 @@ import (
 	"github.com/johnbetancur/vision/backend/internal/usage"
 )
 
-// usageBody is the subset of an OpenAI-compatible response we care about.
 type usageBody struct {
 	Usage struct {
 		PromptTokens     int64 `json:"prompt_tokens"`
@@ -50,8 +49,6 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 			req.Out.URL.RawPath = strings.TrimPrefix(req.In.URL.RawPath, "/api")
 			req.Out.Host = target.Host
 
-			// Store connID in context before stripping the header so
-			// ModifyResponse can recover it after the upstream round-trip.
 			if connID != "" {
 				ctx := context.WithValue(req.Out.Context(), connIDKey{}, connID)
 				req.Out = req.Out.WithContext(ctx)
@@ -60,6 +57,14 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 
 			if apiKey != "" {
 				req.Out.Header.Set("Authorization", "Bearer "+apiKey)
+			}
+
+			if req.Out.Body != nil {
+				body, _ := io.ReadAll(req.Out.Body)
+				req.Out.Body = io.NopCloser(bytes.NewReader(body))
+				slog.Debug("proxy request", "method", req.Out.Method, "url", req.Out.URL.String(), "body", string(body))
+			} else {
+				slog.Debug("proxy request", "method", req.Out.Method, "url", req.Out.URL.String())
 			}
 		},
 
@@ -71,8 +76,17 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 				res.Header.Set("X-Accel-Buffering", "no")
 			}
 
+			if res.StatusCode >= 400 {
+				body, _ := io.ReadAll(res.Body)
+				res.Body = io.NopCloser(bytes.NewReader(body))
+				slog.Error("upstream error", "status", res.StatusCode, "url", res.Request.URL.String(), "body", string(body))
+				return nil
+			}
+
+			slog.Debug("proxy response", "status", res.StatusCode, "url", res.Request.URL.String())
+
 			connID, _ := res.Request.Context().Value(connIDKey{}).(string)
-			if connID == "" || res.StatusCode >= 400 {
+			if connID == "" {
 				return nil
 			}
 
@@ -87,10 +101,8 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 	}
 }
 
-// connIDKey is the context key used to pass the connection ID through to ModifyResponse.
 type connIDKey struct{}
 
-// recordFromBody reads the full response, extracts usage, then restores the body.
 func recordFromBody(res *http.Response, connID string, usageStore *usage.Store) {
 	body, err := io.ReadAll(res.Body)
 	res.Body.Close()
@@ -107,12 +119,10 @@ func recordFromBody(res *http.Response, connID string, usageStore *usage.Store) 
 		return
 	}
 	if err := usageStore.Record(connID, u.Usage.PromptTokens, u.Usage.CompletionTokens); err != nil {
-		log.Printf("usage record error: %v", err)
+		slog.Error("usage record error", "err", err)
 	}
 }
 
-// streamingInterceptor wraps an SSE body and scans for the usage chunk sent
-// by most providers as the last data: {...} line before data: [DONE].
 type streamingInterceptor struct {
 	inner      io.ReadCloser
 	connID     string
@@ -143,7 +153,6 @@ func (s *streamingInterceptor) Close() error {
 
 func (s *streamingInterceptor) extractAndRecord() {
 	data := s.buf.Bytes()
-	// Walk SSE lines looking for the last JSON chunk that has a usage field.
 	var best usageBody
 	for _, line := range bytes.Split(data, []byte("\n")) {
 		line = bytes.TrimPrefix(line, []byte("data: "))
@@ -161,6 +170,6 @@ func (s *streamingInterceptor) extractAndRecord() {
 		return
 	}
 	if err := s.usageStore.Record(s.connID, best.Usage.PromptTokens, best.Usage.CompletionTokens); err != nil {
-		log.Printf("usage record (stream) error: %v", err)
+		slog.Error("usage record (stream) error", "err", err)
 	}
 }

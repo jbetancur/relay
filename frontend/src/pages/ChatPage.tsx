@@ -34,7 +34,7 @@ import {
 } from '@tabler/icons-react'
 import { useParams, useNavigate } from 'react-router'
 
-import { useConversationStore, useConnectionsStore } from '@/store'
+import { useConversationStore, useConnectionsStore, useSettingsStore } from '@/store'
 import { useChat } from '@/hooks/useChat'
 import { isVisionModel } from '@/hooks/useModels'
 import { useTokenCount } from '@/hooks/useTokenCount'
@@ -63,6 +63,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
   const navigate = useNavigate()
   const { getConversation, createConversation, setModel, setConnection } = useConversationStore()
   const { connections, getDefault } = useConnectionsStore()
+  const { settings } = useSettingsStore()
   const [systemDrawerOpen, { open: openSystem, close: closeSystem }] = useDisclosure(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false)
@@ -74,7 +75,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
   // Create conversation on /c/new
   useEffect(() => {
     if (id === 'new') {
-      const conv = createConversation()
+      const conv = createConversation(settings.defaultChatModel)
       const defaultConn = getDefault()
       if (defaultConn) setConnection(conv.id, defaultConn.id)
       navigate(`/c/${conv.id}`, { replace: true })

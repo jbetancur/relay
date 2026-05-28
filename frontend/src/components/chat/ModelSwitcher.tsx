@@ -9,17 +9,22 @@ interface ModelSwitcherProps {
 }
 
 export function ModelSwitcher({ value, onChange, group = 'chat', connectionId }: ModelSwitcherProps) {
-  const { grouped, loading } = useModels(connectionId)
+  const { grouped, loading, error } = useModels(connectionId)
 
   const models = group === 'chat' ? grouped.chat : grouped.image
   const data = models.map((m) => ({ value: m.id, label: m.id }))
+  // Always keep the current value in the list so Mantine doesn't clear it while loading
+  const dataWithCurrent =
+    value && !data.find((d) => d.value === value)
+      ? [{ value, label: value }, ...data]
+      : data
 
   return (
     <Select
-      data={data}
+      data={dataWithCurrent}
       value={value || null}
       onChange={(v) => v && onChange(v)}
-      placeholder={loading ? 'Loading models…' : 'Select model'}
+      placeholder={loading ? 'Loading models…' : error ? `Error: ${error}` : 'Select model'}
       rightSection={loading ? <Loader size="xs" /> : undefined}
       searchable
       size="xs"

@@ -97,9 +97,10 @@ export const api = {
 
   images: {
     generate(body: ImageGenerationRequest, connectionId?: string | null) {
-      return request<{ data: Array<{ url?: string; b64_json?: string; revised_prompt?: string }> }>(
+      const { style: _style, response_format: _rf, ...payload } = body
+return request<{ data: Array<{ url?: string; b64_json?: string; revised_prompt?: string }> }>(
         '/v1/images/generations',
-        { method: 'POST', body: JSON.stringify(body) },
+        { method: 'POST', body: JSON.stringify(payload) },
         connectionId
       )
     },

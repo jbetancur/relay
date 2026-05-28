@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Box,
   Group,
@@ -29,7 +29,7 @@ import { notifications } from '@mantine/notifications'
 import { useImageGen } from '@/hooks/useImageGen'
 import { useImageGalleryStore, useSettingsStore, useConnectionsStore } from '@/store'
 import { ModelSwitcher } from '@/components/chat/ModelSwitcher'
-import type { ImageSize, ImageQuality, ImageStyle } from '@/types'
+import type { ImageSize, ImageQuality } from '@/types'
 import classes from './ImagePage.module.css'
 
 const SIZE_OPTIONS_GPT: { value: ImageSize; label: string }[] = [
@@ -66,10 +66,6 @@ const QUALITY_OPTIONS_DALLE2: { value: ImageQuality; label: string }[] = [
   { value: 'standard', label: 'Standard' },
 ]
 
-const STYLE_OPTIONS: { value: ImageStyle; label: string }[] = [
-  { value: 'vivid', label: 'Vivid' },
-  { value: 'natural', label: 'Natural' },
-]
 
 function getModelFamily(model: string): 'gpt-image' | 'dall-e-3' | 'dall-e-2' {
   if (model.startsWith('gpt-image')) return 'gpt-image'
@@ -83,13 +79,17 @@ interface ImagePageProps {
 
 export function ImagePage({ onToggleSidebar }: ImagePageProps) {
   const { settings } = useSettingsStore()
-  const { connections, getDefault } = useConnectionsStore()
-  const [connectionId, setConnectionId] = useState<string | null>(() => getDefault()?.id ?? null)
+  const { connections, loading: connectionsLoading, getDefault } = useConnectionsStore()
+  const defaultConnectionId = getDefault()?.id ?? null
+  const [connectionId, setConnectionId] = useState<string | null>(defaultConnectionId)
+
+  useEffect(() => {
+    if (defaultConnectionId) setConnectionId((prev) => prev ?? defaultConnectionId)
+  }, [defaultConnectionId])
   const [model, setModel] = useState(settings.defaultImageModel)
   const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState<ImageSize>('1024x1024')
   const [quality, setQuality] = useState<ImageQuality>('auto')
-  const [style, setStyle] = useState<ImageStyle>('vivid')
   const [n, setN] = useState<number>(1)
 
   const modelFamily = getModelFamily(model)
@@ -115,7 +115,7 @@ export function ImagePage({ onToggleSidebar }: ImagePageProps) {
 
   async function handleGenerate() {
     if (!prompt.trim()) return
-    await generate({ prompt, model, size, quality, style, n })
+    await generate({ prompt, model, size, quality, n })
     notifications.show({ message: 'Image generated', color: 'teal' })
   }
 
@@ -178,14 +178,6 @@ export function ImagePage({ onToggleSidebar }: ImagePageProps) {
                 onChange={(v) => v && setQuality(v as ImageQuality)}
               />
 
-              {modelFamily === 'dall-e-3' && (
-                <Select
-                  label="Style"
-                  data={STYLE_OPTIONS}
-                  value={style}
-                  onChange={(v) => v && setStyle(v as ImageStyle)}
-                />
-              )}
 
               {modelFamily !== 'dall-e-3' && (
                 <NumberInput
