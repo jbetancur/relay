@@ -63,10 +63,12 @@ func main() {
 
 		r.Get("/api/connections", connHandler.List)
 		r.Post("/api/connections", connHandler.Create)
+		r.Post("/api/connections/test", connHandler.Test)
 		r.Get("/api/connections/{id}", connHandler.Get)
 		r.Put("/api/connections/{id}", connHandler.Update)
 		r.Delete("/api/connections/{id}", connHandler.Delete)
 		r.Get("/api/connections/{id}/models", connHandler.Models)
+		r.Get("/api/connections/{id}/model-meta", connHandler.ModelMeta)
 		r.Get("/api/connections/{id}/stats", connHandler.GetStats)
 		r.Delete("/api/connections/{id}/stats", connHandler.ResetStats)
 		r.Get("/api/usage/by-model", connHandler.UsageByModel)

@@ -69,6 +69,11 @@ export interface Message {
   route?: { category: RouteCategory; model: string }
 }
 
+// #context: how the conversation history is trimmed before being sent upstream.
+// 'none' sends everything, 'window' keeps recent messages within a token budget,
+// 'summarize' condenses dropped older messages via a cheap model.
+export type ContextStrategy = 'none' | 'window' | 'summarize'
+
 export interface Conversation {
   id: string
   title: string
@@ -78,6 +83,9 @@ export interface Conversation {
   connectionId: string | null
   createdAt: number
   updatedAt: number
+  // Per-conversation override of the global context strategy; falls back to
+  // settings.contextStrategy when unset.
+  contextStrategy?: ContextStrategy
 }
 
 // ── Models ────────────────────────────────────────────────────────────────────
@@ -92,6 +100,17 @@ export interface Model {
 export interface ModelsResponse {
   object: 'list'
   data: Model[]
+}
+
+// Per-model metadata resolved by the backend (table + optional provider probe).
+export type ModelKind = 'chat' | 'image' | 'embedding' | 'audio' | 'moderation' | 'other'
+
+export interface ModelMeta {
+  contextWindow: number // 0 = unknown
+  price?: { input: number; output: number } // USD / 1M tokens
+  capabilities?: string[] // e.g. ['vision'], ['image']
+  kind?: ModelKind
+  source: 'probe' | 'table' | 'unknown'
 }
 
 export type ModelGroup = 'chat' | 'image'
@@ -201,4 +220,14 @@ export interface AppSettings {
   // #2 Tool use: when on, chat routes through the agent loop so the model can
   // call server-side tools (e.g. web search).
   toolsEnabled: boolean
+  // #context: default trimming strategy (overridable per conversation) plus its
+  // knobs. budgetFraction is the share of the model's context window we fill;
+  // replyHeadroom reserves tokens for the response. summaryModel is used only by
+  // the 'summarize' strategy. contextWindowOverrides lets users set windows for
+  // unknown/self-hosted models, mirroring priceOverrides.
+  contextStrategy: ContextStrategy
+  contextBudgetFraction: number
+  contextReplyHeadroom: number
+  contextSummaryModel: string
+  contextWindowOverrides: Record<string, number>
 }

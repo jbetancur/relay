@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   Stack,
   TextInput,
@@ -6,9 +7,13 @@ import {
   Switch,
   Button,
   Group,
+  Alert,
 } from '@mantine/core'
+import { IconCheck, IconAlertCircle } from '@tabler/icons-react'
 import { useForm } from '@mantine/form'
 import type { Connection, ConnectionInput, ConnectionTypeHint } from '@/types'
+
+type TestResult = { ok: true } | { ok: false; message: string }
 
 const TYPE_OPTIONS: { value: ConnectionTypeHint; label: string }[] = [
   { value: 'openai', label: 'OpenAI-compatible' },
@@ -42,6 +47,31 @@ export function ConnectionForm({ initial, onSubmit, onCancel, loading }: Connect
           : 'Must start with http:// or https://',
     },
   })
+
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<TestResult | null>(null)
+
+  async function handleTest() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await fetch('/api/connections/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form.values),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setTestResult({ ok: true })
+      } else {
+        setTestResult({ ok: false, message: data.error ?? `Failed (status ${data.status ?? '?'})` })
+      }
+    } catch (e) {
+      setTestResult({ ok: false, message: e instanceof Error ? e.message : 'Request failed' })
+    } finally {
+      setTesting(false)
+    }
+  }
 
   return (
     <form onSubmit={form.onSubmit(onSubmit)}>
@@ -86,13 +116,33 @@ export function ConnectionForm({ initial, onSubmit, onCancel, loading }: Connect
           />
         </Group>
 
-        <Group justify="flex-end" mt="xs">
-          <Button variant="subtle" onClick={onCancel} disabled={loading}>
-            Cancel
+        {testResult && (
+          <Alert
+            color={testResult.ok ? 'teal' : 'red'}
+            icon={testResult.ok ? <IconCheck size={14} /> : <IconAlertCircle size={14} />}
+            py="xs"
+          >
+            {testResult.ok ? 'Connection succeeded.' : testResult.message}
+          </Alert>
+        )}
+
+        <Group justify="space-between" mt="xs">
+          <Button
+            variant="default"
+            onClick={handleTest}
+            loading={testing}
+            disabled={loading || !form.values.baseUrl}
+          >
+            Test connection
           </Button>
-          <Button type="submit" loading={loading}>
-            {initial ? 'Save changes' : 'Add connection'}
-          </Button>
+          <Group>
+            <Button variant="subtle" onClick={onCancel} disabled={loading}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={loading}>
+              {initial ? 'Save changes' : 'Add connection'}
+            </Button>
+          </Group>
         </Group>
       </Stack>
     </form>

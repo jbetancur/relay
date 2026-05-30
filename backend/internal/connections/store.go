@@ -94,6 +94,7 @@ func (s *Store) GetDefault() (*Connection, error) {
 }
 
 func (s *Store) Create(input ConnectionInput) (*Connection, error) {
+	input = normalize(input)
 	if err := validate(input); err != nil {
 		return nil, err
 	}
@@ -118,6 +119,7 @@ func (s *Store) Create(input ConnectionInput) (*Connection, error) {
 }
 
 func (s *Store) Update(id string, input ConnectionInput) (*Connection, error) {
+	input = normalize(input)
 	if err := validate(input); err != nil {
 		return nil, err
 	}
@@ -175,6 +177,15 @@ func (s *Store) Seed(name, baseURL, apiKey string) error {
 		IsDefault: true,
 	})
 	return err
+}
+
+// normalize trims surrounding whitespace from free-text fields. Pasted API keys
+// and URLs commonly pick up trailing spaces or newlines that break auth.
+func normalize(input ConnectionInput) ConnectionInput {
+	input.Name = strings.TrimSpace(input.Name)
+	input.BaseURL = strings.TrimSpace(input.BaseURL)
+	input.APIKey = strings.TrimSpace(input.APIKey)
+	return input
 }
 
 func validate(input ConnectionInput) error {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import {
   Box,
   Group,
@@ -12,7 +12,6 @@ import {
   Button,
   UnstyledButton,
   ThemeIcon,
-  Badge,
   Menu,
   CopyButton,
 } from '@mantine/core'
@@ -31,14 +30,19 @@ import {
   IconJson,
   IconCopy,
   IconCheck,
+  IconAdjustmentsHorizontal,
 } from '@tabler/icons-react'
 import { useParams, useNavigate } from 'react-router'
 
 import { useConversationStore, useConnectionsStore, useSettingsStore } from '@/store'
 import { useChat } from '@/hooks/useChat'
 import { isVisionModel, useModels } from '@/hooks/useModels'
-import { useTokenCount } from '@/hooks/useTokenCount'
+import { useTokenCount, tokensForMessage } from '@/hooks/useTokenCount'
+import { buildContext, resolveBudget } from '@/lib/contextWindow'
+import { resolveContextWindow } from '@/lib/contextWindows'
+import { useModelMeta } from '@/hooks/useModelMeta'
 import { MessageBubble } from '@/components/chat/MessageBubble'
+import { ContextGauge } from '@/components/chat/ContextGauge'
 import { MessageInput } from '@/components/chat/MessageInput'
 import { ModelSwitcher } from '@/components/chat/ModelSwitcher'
 import { SystemPromptDrawer } from '@/components/chat/SystemPromptDrawer'
@@ -61,7 +65,7 @@ interface ChatPageProps {
 export function ChatPage({ onToggleSidebar }: ChatPageProps) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { getConversation, createConversation, setModel, setConnection } = useConversationStore()
+  const { getConversation, createConversation, setModel, setConnection, setContextStrategy } = useConversationStore()
   const { connections, getDefault } = useConnectionsStore()
   const { settings } = useSettingsStore()
   const [systemDrawerOpen, { open: openSystem, close: closeSystem }] = useDisclosure(false)
@@ -85,6 +89,30 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
   const conversation = id && id !== 'new' ? getConversation(id) : undefined
   const { send, stop, regenerate, editAndResend, streaming, routing, error } = useChat(conversation)
   const tokenCount = useTokenCount(conversation)
+
+  // #context: gauge + per-message preview of what the active strategy will send.
+  const contextStrategy = conversation?.contextStrategy ?? settings.contextStrategy
+  const modelMeta = useModelMeta(
+    conversation ? (conversation.connectionId ?? getDefault()?.id ?? null) : null,
+    conversation?.model ?? ''
+  )
+  const contextWindow = conversation
+    ? resolveContextWindow(conversation.model, modelMeta?.contextWindow, settings.contextWindowOverrides)
+    : null
+  const { droppedIds, perMessageTokens } = useMemo(() => {
+    const perMessageTokens = new Map<string, number>()
+    const droppedIds = new Set<string>()
+    if (!conversation) return { droppedIds, perMessageTokens }
+    for (const m of conversation.messages) perMessageTokens.set(m.id, tokensForMessage(m))
+    const budget = resolveBudget(contextWindow, settings.contextBudgetFraction, settings.contextReplyHeadroom)
+    const ctx = buildContext(
+      conversation.messages.map((m) => ({ role: m.role, content: m.content })),
+      { strategy: contextStrategy, systemPrompt: conversation.systemPrompt, budget }
+    )
+    // The last `dropped.length` of the original messages are the dropped ones.
+    for (let i = 0; i < ctx.dropped.length; i++) droppedIds.add(conversation.messages[i].id)
+    return { droppedIds, perMessageTokens }
+  }, [conversation, contextStrategy, contextWindow, settings.contextBudgetFraction, settings.contextReplyHeadroom])
 
   // Auto-scroll to bottom on new messages/streaming
   useEffect(() => {
@@ -113,7 +141,11 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
     .filter((id) => id !== conversation?.model)
     .slice(0, 12)
 
-  const supportsVision = isVisionModel(conversation?.model ?? '')
+  // Prefer the backend's capability list; fall back to the local heuristic until
+  // meta resolves (or when the model is unknown to the backend).
+  const supportsVision = modelMeta?.capabilities
+    ? modelMeta.capabilities.includes('vision')
+    : isVisionModel(conversation?.model ?? '')
 
   const hasConnections = enabledConnections.length > 0
   const lastMsg = conversation?.messages.at(-1)
@@ -182,11 +214,45 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
         <Box flex={1} />
 
         {tokenCount > 0 && (
-          <Tooltip label="Estimated context tokens (≈4 chars/token)" withArrow>
-            <Badge size="sm" variant="outline" color="gray" style={{ cursor: 'default', fontFamily: 'monospace' }}>
-              ~{tokenCount.toLocaleString()} tok
-            </Badge>
-          </Tooltip>
+          <Group gap={6} wrap="nowrap">
+            <ContextGauge
+              usedTokens={tokenCount}
+              contextWindow={contextWindow}
+              strategy={contextStrategy}
+            />
+            <Menu shadow="md" width={220} position="bottom-end">
+              <Menu.Target>
+                <Tooltip label="Context strategy" withArrow>
+                  <ActionIcon variant="subtle" size="sm">
+                    <IconAdjustmentsHorizontal size={15} />
+                  </ActionIcon>
+                </Tooltip>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Label>Context strategy (this chat)</Menu.Label>
+                {([
+                  ['none', 'None — send everything'],
+                  ['window', 'Window — drop oldest'],
+                  ['summarize', 'Summarize — condense old'],
+                ] as const).map(([value, label]) => (
+                  <Menu.Item
+                    key={value}
+                    onClick={() => conversation && setContextStrategy(conversation.id, value)}
+                    rightSection={contextStrategy === value ? <IconCheck size={12} /> : undefined}
+                  >
+                    {label}
+                  </Menu.Item>
+                ))}
+                <Menu.Divider />
+                <Menu.Item
+                  c="dimmed"
+                  onClick={() => conversation && setContextStrategy(conversation.id, undefined)}
+                >
+                  Use global default
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          </Group>
         )}
 
         {canRegenerate && (
@@ -309,6 +375,8 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
                     ? (newText) => editAndResend(msg.id, newText)
                     : undefined
                   }
+                  tokens={perMessageTokens.get(msg.id)}
+                  dropped={droppedIds.has(msg.id)}
                 />
               ))
             )}

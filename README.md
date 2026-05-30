@@ -6,9 +6,12 @@ A self-hosted AI chat and image-generation interface that proxies any OpenAI-com
 
 - **Multiple connections.** Add as many API backends as you want (OpenAI, Ollama, Anthropic, or anything custom) and switch between them per chat.
 - **Smart model routing.** Turn on auto-routing and a classifier reads each prompt, sorts it into a category (coding, creative, reasoning, or fast), and sends it to the model you picked for that category. Because every category can point at a different connection, a single conversation can lean on different providers depending on what you ask. More on this below.
+- **Context management you control.** Pick how each chat handles a growing history: send everything, keep a recent token-budget window, or summarize older messages. A live gauge shows how full the model's context window is, and every message shows its token count, so you can see what is about to fall out of context instead of hitting a wall. Set it globally or per chat.
 - **Chat.** Streaming and non-streaming completions with full conversation history, editing, and regeneration.
 - **Image generation.** Works with `gpt-image-1`, `dall-e-3`, and `dall-e-2`, with controls that adapt to whichever model you select.
 - **Usage tracking.** Token usage is recorded per connection and per model in a local SQLite database, so you can see what you are spending.
+- **Live logs in the UI.** A toggleable log drawer (sidebar button or the Cmd/Ctrl backtick shortcut) streams the backend's logs in real time, with level filters and search, so you can see why a request failed without digging through `docker logs`.
+- **Model-aware metadata.** Context windows, pricing, and capabilities are resolved by the backend, which probes providers that expose them (Ollama, OpenRouter) and falls back to a maintained table. The frontend no longer hardcodes this.
 - **Prompt library.** Save prompts you reach for often and reuse them in a click.
 - **One Docker image.** The Go backend and React frontend ship together, served by nginx in a single container.
 
@@ -26,6 +29,18 @@ You set up four slots in Settings, and each slot points at a model on any of you
 When you send a message, Relay first does a quick local keyword check to catch the obvious cases for free. If the prompt is ambiguous, it asks the Fast model to classify it, then routes the message to the matching slot's model and connection. If the classifier is unreachable or times out, it falls back to whatever you configured, either the conversation's own model or the Fast slot. Each reply shows a small badge so you can see which category handled it.
 
 None of this needs special provider support. Routing just decides which connection to use, and the backend handles the actual switch.
+
+## How context management works
+
+Every chat turn sends the conversation history to the model, and that history keeps growing. Left unchecked it eventually exceeds the model's context window and the request fails, and along the way you re-pay for the whole transcript on every turn. Relay lets you decide how to handle that, globally in Settings or per chat from the header:
+
+- **None.** Send the full history. Simple, but it will fail once the chat outgrows the window.
+- **Window** (the default). Keep the system prompt plus the most recent messages that fit a token budget, and drop the oldest. Free and deterministic.
+- **Summarize.** When the history overflows, condense the dropped older messages into a short summary using a model you choose, then send that plus the recent messages. This keeps old context at the cost of an occasional summary call, so it is off by default and clearly marked.
+
+The budget is a share of the model's context window (configurable), with some room reserved for the reply. To make all of this visible rather than silent, the chat header shows a gauge of how full the window is (it shifts toward red as it fills), and each message shows its estimated token count. Messages that the current strategy would drop are greyed out, so you can see what is leaving context before you send.
+
+Context windows themselves come from the backend, which probes providers that report them and otherwise uses a maintained table. For unknown or self-hosted models you can set a window override in Settings.
 
 ## Getting started
 
@@ -173,6 +188,8 @@ flowchart TD
         subgraph Backend["Go backend :8080"]
             Conn["/api/connections<br/>CRUD"]
             Usage["/api/usage/by-model"]
+            Meta["/api/connections/{id}/model-meta<br/>window, price, capabilities"]
+            Logs["/api/logs/stream<br/>live SSE logs"]
             Agent["/api/agent/chat<br/>tool loop"]
             Docs["/api/documents/extract"]
             Proxy["/api/v1/*<br/>reverse proxy"]
@@ -190,6 +207,7 @@ flowchart TD
     Conn --> DB
     Usage --> DB
     Proxy -->|"injects key,<br/>records usage"| DB
+    Meta -->|"probes for metadata"| Up3
     Proxy --> Up1
     Proxy --> Up2
     Proxy --> Up3
@@ -212,10 +230,13 @@ POST   /api/connections             Create a connection
 GET    /api/connections/{id}        Get a connection
 PUT    /api/connections/{id}        Update a connection
 DELETE /api/connections/{id}        Delete a connection
-GET    /api/connections/{id}/models List models for a connection
-GET    /api/connections/{id}/stats  Usage stats for a connection
-DELETE /api/connections/{id}/stats  Reset stats for a connection
+GET    /api/connections/{id}/models     List models for a connection
+GET    /api/connections/{id}/model-meta Model metadata (window/price/capabilities)
+GET    /api/connections/{id}/stats      Usage stats for a connection
+DELETE /api/connections/{id}/stats      Reset stats for a connection
 ```
+
+`model-meta` with `?model=<id>` resolves one model (probing the provider where supported); without it, it returns the full static metadata table for bulk use.
 
 **Connection object**
 
@@ -240,11 +261,12 @@ DELETE /api/connections/{id}/stats  Reset stats for a connection
 GET /api/usage/by-model    Token usage totals grouped by model
 ```
 
-### Agent and documents
+### Agent, documents, and logs
 
 ```
 POST /api/agent/chat        Tool-calling chat (streams tool steps then the answer)
 POST /api/documents/extract Extract text from an uploaded file (PDFs are parsed)
+GET  /api/logs/stream       Live backend logs as Server-Sent Events
 ```
 
 ### Proxy

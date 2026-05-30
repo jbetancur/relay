@@ -9,6 +9,8 @@ import {
   Divider,
   Group,
   Tabs,
+  Slider,
+  NumberInput,
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
@@ -46,6 +48,10 @@ export function SettingsPage() {
       routeSlots: settings.routeSlots,
       routeFallback: settings.routeFallback,
       toolsEnabled: settings.toolsEnabled,
+      contextStrategy: settings.contextStrategy,
+      contextBudgetFraction: settings.contextBudgetFraction,
+      contextReplyHeadroom: settings.contextReplyHeadroom,
+      contextSummaryModel: settings.contextSummaryModel,
     },
   })
 
@@ -155,6 +161,63 @@ export function SettingsPage() {
                       value={form.values.routeFallback}
                       onChange={(v) => v && form.setFieldValue('routeFallback', v as 'conversation' | 'fast')}
                       maw={320}
+                    />
+                  </Stack>
+                )}
+
+                <Divider label="Context" labelPosition="left" />
+
+                <Select
+                  label="Default context strategy"
+                  description="How conversation history is trimmed before being sent. Overridable per chat from the chat header."
+                  data={[
+                    { value: 'none', label: 'None — send the full history (may hit the model limit)' },
+                    { value: 'window', label: 'Window — keep recent messages within a token budget (free)' },
+                    { value: 'summarize', label: 'Summarize — condense older messages (costs tokens)' },
+                  ]}
+                  value={form.values.contextStrategy}
+                  onChange={(v) => v && form.setFieldValue('contextStrategy', v as typeof form.values.contextStrategy)}
+                  maw={460}
+                />
+
+                {form.values.contextStrategy !== 'none' && (
+                  <>
+                    <Box maw={460}>
+                      <Text size="sm" fw={500}>Context budget: {Math.round(form.values.contextBudgetFraction * 100)}% of the window</Text>
+                      <Text size="xs" c="dimmed" mb="xs">Share of the model's context window to fill with history before trimming.</Text>
+                      <Slider
+                        min={0.3}
+                        max={0.95}
+                        step={0.05}
+                        value={form.values.contextBudgetFraction}
+                        onChange={(v) => form.setFieldValue('contextBudgetFraction', v)}
+                        label={(v) => `${Math.round(v * 100)}%`}
+                      />
+                    </Box>
+
+                    <NumberInput
+                      label="Reply headroom (tokens)"
+                      description="Tokens reserved for the model's response, kept free of history."
+                      value={form.values.contextReplyHeadroom}
+                      onChange={(v) => form.setFieldValue('contextReplyHeadroom', typeof v === 'number' ? v : 1024)}
+                      min={0}
+                      step={256}
+                      maw={260}
+                    />
+                  </>
+                )}
+
+                {form.values.contextStrategy === 'summarize' && (
+                  <Stack gap="xs">
+                    <Text size="sm" fw={500}>Summary model</Text>
+                    <Text size="xs" c="dimmed">
+                      Used to condense dropped messages. This spends tokens each time history overflows — pick a cheap model. Leave blank to reuse the conversation's model.
+                    </Text>
+                    <ModelSwitcher
+                      value={form.values.contextSummaryModel}
+                      onChange={(v) => form.setFieldValue('contextSummaryModel', v)}
+                      group="chat"
+                      connectionId={defaultConnection?.id}
                     />
                   </Stack>
                 )}

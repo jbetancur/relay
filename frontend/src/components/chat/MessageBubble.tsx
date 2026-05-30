@@ -13,6 +13,10 @@ interface MessageBubbleProps {
   message: Message
   isStreaming?: boolean
   onEdit?: (newText: string) => void
+  // #context: estimated tokens for this message, and whether the active strategy
+  // would drop it from the next request (rendered dimmed when true).
+  tokens?: number
+  dropped?: boolean
 }
 
 const markdownComponents: Components = {
@@ -73,7 +77,7 @@ const markdownComponents: Components = {
   },
 }
 
-export function MessageBubble({ message, isStreaming, onEdit }: MessageBubbleProps) {
+export function MessageBubble({ message, isStreaming, onEdit, tokens, dropped }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const textContent = extractText(message.content)
   const images = extractImages(message.content)
@@ -92,7 +96,11 @@ export function MessageBubble({ message, isStreaming, onEdit }: MessageBubblePro
   }
 
   return (
-    <Box className={classes.row} data-role={message.role}>
+    <Box
+      className={classes.row}
+      data-role={message.role}
+      style={dropped ? { opacity: 0.45 } : undefined}
+    >
       <Avatar
         size="sm"
         radius="xl"
@@ -144,6 +152,13 @@ export function MessageBubble({ message, isStreaming, onEdit }: MessageBubblePro
               <Badge size="xs" variant="light" color="violet" radius="sm" style={{ textTransform: 'none' }}>
                 {message.route.category}
               </Badge>
+            </Tooltip>
+          )}
+          {tokens != null && tokens > 0 && (
+            <Tooltip label={dropped ? 'Dropped from context (won’t be sent)' : 'Estimated tokens'} withArrow>
+              <Text size="xs" c="dimmed" ff="monospace" style={{ cursor: 'default' }}>
+                ~{tokens.toLocaleString()}{dropped ? ' ✕' : ''}
+              </Text>
             </Tooltip>
           )}
           {isUser && !isStreaming && onEdit && (

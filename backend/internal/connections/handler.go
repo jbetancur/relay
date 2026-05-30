@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/johnbetancur/vision/backend/internal/modelmeta"
 	"github.com/johnbetancur/vision/backend/internal/usage"
 )
 
@@ -139,6 +140,98 @@ func (h *Handler) Models(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
+}
+
+// ModelMeta returns per-model metadata (context window, pricing, capabilities).
+// With ?model=<id> it resolves a single model, probing the provider where
+// supported; without it, it returns the full static table for bulk frontend use.
+func (h *Handler) ModelMeta(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	conn, err := h.store.GetByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if conn == nil {
+		writeError(w, http.StatusNotFound, "connection not found")
+		return
+	}
+
+	model := r.URL.Query().Get("model")
+	if model == "" {
+		writeJSON(w, http.StatusOK, modelmeta.Table())
+		return
+	}
+
+	meta := modelmeta.Resolve(r.Context(), modelmeta.Conn{
+		ID:       conn.ID,
+		BaseURL:  conn.BaseURL,
+		APIKey:   conn.APIKey,
+		TypeHint: string(conn.TypeHint),
+	}, model)
+	writeJSON(w, http.StatusOK, meta)
+}
+
+// Test makes a live GET /v1/models call against the supplied base URL + key and
+// reports whether auth/connectivity works. Accepts a ConnectionInput body so a
+// connection can be validated before it is saved. Surfaces the upstream status
+// and error body so the user sees the real reason (e.g. invalid_api_key).
+func (h *Handler) Test(w http.ResponseWriter, r *http.Request) {
+	var input ConnectionInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	baseURL := strings.TrimSpace(input.BaseURL)
+	apiKey := strings.TrimSpace(input.APIKey)
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		writeError(w, http.StatusBadRequest, "baseUrl must start with http:// or https://")
+		return
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, strings.TrimRight(baseURL, "/")+"/v1/models", nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("build request: %v", err))
+		return
+	}
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": fmt.Sprintf("could not reach %s: %v", baseURL, err)})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		return
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":     false,
+		"status": resp.StatusCode,
+		"error":  upstreamMessage(body, resp.StatusCode),
+	})
+}
+
+// upstreamMessage pulls a human-readable error from an OpenAI-style error body,
+// falling back to the raw text / status.
+func upstreamMessage(body []byte, status int) string {
+	var parsed struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &parsed) == nil && parsed.Error.Message != "" {
+		return parsed.Error.Message
+	}
+	if len(body) > 0 {
+		return string(body)
+	}
+	return fmt.Sprintf("upstream returned %d", status)
 }
 
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {

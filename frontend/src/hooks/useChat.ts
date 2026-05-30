@@ -2,8 +2,43 @@ import { useState, useCallback, useRef } from 'react'
 import { api } from '@/lib/api'
 import { useConversationStore, useSettingsStore, useConnectionsStore } from '@/store'
 import { resolveRoute } from '@/lib/autoRoute'
+import { buildContext, resolveBudget, type ChatMsg } from '@/lib/contextWindow'
+import { resolveContextWindow } from '@/lib/contextWindows'
+import { getModelMeta } from '@/hooks/useModelMeta'
+import { messageText } from '@/hooks/useTokenCount'
 import type { Conversation, MessageContent, RouteCategory } from '@/types'
 import type { FileAttachment } from '@/components/chat/MessageInput'
+
+// Condense dropped older messages into a single summary string via a cheap model.
+async function summarizeDropped(
+  dropped: ChatMsg[],
+  model: string,
+  connectionId: string | null,
+  signal?: AbortSignal
+): Promise<string> {
+  const transcript = dropped
+    .map((m) => `${m.role}: ${messageText(m.content)}`)
+    .join('\n')
+  const res = await api.chat.complete(
+    {
+      model,
+      stream: false,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Summarize the following conversation excerpt concisely, preserving facts, ' +
+            'decisions, names, and any open threads. This summary replaces the original ' +
+            'messages as context for an ongoing chat.',
+        },
+        { role: 'user', content: transcript.slice(0, 12000) },
+      ],
+    },
+    connectionId,
+    signal
+  )
+  return res.choices[0]?.message?.content?.trim() ?? ''
+}
 
 async function generateTitle(
   userText: string,
@@ -92,12 +127,48 @@ export function useChat(conversation: Conversation | undefined) {
         modelOverride || routed?.model || conversation.model || settings.defaultChatModel
       const route = routed ? { category: routed.category, model: routed.model } : undefined
       const isFirstExchange = conversation.messages.length === 0
+
+      // #context: trim history per the active strategy (per-chat override wins).
+      const strategy = conversation.contextStrategy ?? settings.contextStrategy
+      let contextWindow: number | null = null
+      if (strategy !== 'none') {
+        const meta = connectionId ? await getModelMeta(connectionId, model) : null
+        contextWindow = resolveContextWindow(model, meta?.contextWindow, settings.contextWindowOverrides)
+      }
+      const budget = resolveBudget(
+        contextWindow,
+        settings.contextBudgetFraction,
+        settings.contextReplyHeadroom
+      )
+      const history: ChatMsg[] = [
+        ...conversation.messages.map((m) => ({ role: m.role, content: m.content })),
+        { role: 'user' as const, content },
+      ]
+      const ctx = buildContext(history, {
+        strategy,
+        systemPrompt: conversation.systemPrompt,
+        budget,
+      })
+
+      // For 'summarize', condense the dropped older messages into a system note.
+      let summaryNote = ''
+      if (ctx.summaryNeeded) {
+        const summaryModel = settings.contextSummaryModel || model
+        try {
+          summaryNote = await summarizeDropped(ctx.dropped, summaryModel, connectionId)
+        } catch {
+          summaryNote = '' // summarization is best-effort; fall back to plain windowing
+        }
+      }
+
       const messages = [
         ...(conversation.systemPrompt
           ? [{ role: 'system' as const, content: conversation.systemPrompt }]
           : []),
-        ...conversation.messages.map((m) => ({ role: m.role, content: m.content })),
-        { role: 'user' as const, content },
+        ...(summaryNote
+          ? [{ role: 'system' as const, content: `Summary of earlier conversation:\n${summaryNote}` }]
+          : []),
+        ...ctx.sent.map((m) => ({ role: m.role, content: m.content })),
       ]
 
       if (settings.toolsEnabled) {

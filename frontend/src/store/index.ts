@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Conversation, Message, AppSettings, GeneratedImage } from '@/types'
+import type { Conversation, Message, AppSettings, GeneratedImage, ContextStrategy } from '@/types'
 
 export { useConnectionsStore } from './connections'
 
@@ -19,6 +19,7 @@ interface ConversationState {
   updateLastAssistantMessage: (conversationId: string, content: string) => void
   setModel: (conversationId: string, model: string) => void
   setSystemPrompt: (conversationId: string, prompt: string) => void
+  setContextStrategy: (conversationId: string, strategy: ContextStrategy | undefined) => void
   setConnection: (conversationId: string, connectionId: string | null) => void
   deleteLastMessages: (conversationId: string, count: number) => void
   truncateAfterMessage: (conversationId: string, messageId: string) => void
@@ -107,6 +108,14 @@ export const useConversationStore = create<ConversationState>()(
         }))
       },
 
+      setContextStrategy(conversationId, strategy) {
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId ? { ...c, contextStrategy: strategy } : c
+          ),
+        }))
+      },
+
       setConnection(conversationId, connectionId) {
         set((s) => ({
           conversations: s.conversations.map((c) =>
@@ -165,6 +174,11 @@ export const useSettingsStore = create<SettingsState>()(
         priceOverrides: {},
         monthlyBudgetUSD: 0,
         toolsEnabled: false,
+        contextStrategy: 'window',
+        contextBudgetFraction: 0.75,
+        contextReplyHeadroom: 1024,
+        contextSummaryModel: '',
+        contextWindowOverrides: {},
       },
       updateSettings(patch) {
         set((s) => ({ settings: { ...s.settings, ...patch } }))
@@ -172,7 +186,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'relay-settings',
-      version: 4,
+      version: 5,
       migrate(state: unknown, version: number) {
         const root = (state ?? {}) as Record<string, unknown>
         const s = (root.settings ?? root) as Record<string, unknown>
@@ -193,6 +207,14 @@ export const useSettingsStore = create<SettingsState>()(
           delete s.autoRouteStrongModel
           s.routeSlots ??= {}
           s.routeFallback ??= 'conversation'
+        }
+        if (version < 5) {
+          // v5 adds user-controlled context management.
+          s.contextStrategy ??= 'window'
+          s.contextBudgetFraction ??= 0.75
+          s.contextReplyHeadroom ??= 1024
+          s.contextSummaryModel ??= ''
+          s.contextWindowOverrides ??= {}
         }
         root.settings = s
         return root as unknown as SettingsState
@@ -221,5 +243,33 @@ export const useImageGalleryStore = create<ImageGalleryState>()(
       },
     }),
     { name: 'relay-images' }
+  )
+)
+
+// ── Recent models store ───────────────────────────────────────────────────────
+// Tracks recently picked models per connection so pickers can float them to the
+// top. Keyed per connection since model availability differs by provider.
+
+const MAX_RECENTS = 8
+
+interface RecentModelsState {
+  recentModels: Record<string, string[]>
+  recordModel: (connectionId: string, model: string) => void
+}
+
+export const useRecentModelsStore = create<RecentModelsState>()(
+  persist(
+    (set) => ({
+      recentModels: {},
+      recordModel(connectionId, model) {
+        if (!connectionId || !model) return
+        set((s) => {
+          const prev = s.recentModels[connectionId] ?? []
+          const next = [model, ...prev.filter((m) => m !== model)].slice(0, MAX_RECENTS)
+          return { recentModels: { ...s.recentModels, [connectionId]: next } }
+        })
+      },
+    }),
+    { name: 'relay-recent-models' }
   )
 )

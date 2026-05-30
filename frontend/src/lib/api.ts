@@ -2,6 +2,7 @@ import type {
   ChatCompletionRequest,
   ChatCompletionChunk,
   ModelsResponse,
+  ModelMeta,
   ImageGenerationRequest,
   ModelUsage,
   AgentEvent,
@@ -40,6 +41,14 @@ export const api = {
   models: {
     list(connectionId?: string | null): Promise<ModelsResponse> {
       return request('/v1/models', undefined, connectionId)
+    },
+    // Single-model metadata (probes the provider where supported).
+    meta(connectionId: string, model: string): Promise<ModelMeta> {
+      return request(`/connections/${connectionId}/model-meta?model=${encodeURIComponent(model)}`)
+    },
+    // Full static metadata table keyed by model pattern (bulk, no probing).
+    metaTable(connectionId: string): Promise<Record<string, ModelMeta>> {
+      return request(`/connections/${connectionId}/model-meta`)
     },
   },
 

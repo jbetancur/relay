@@ -17,9 +17,9 @@ import {
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { IconTrash, IconPlus, IconAlertTriangle, IconRefresh } from '@tabler/icons-react'
-import { useSettingsStore } from '@/store'
+import { useSettingsStore, useConnectionsStore } from '@/store'
 import { api } from '@/lib/api'
-import { BUILTIN_PRICING, costFor, formatUSD, priceForModel } from '@/lib/pricing'
+import { costFor, formatUSD, priceForModel, type ModelPrice } from '@/lib/pricing'
 import type { ModelUsage } from '@/types'
 
 function startOfMonthMillis(): number {
@@ -29,9 +29,12 @@ function startOfMonthMillis(): number {
 
 export function CostsTab() {
   const { settings, updateSettings } = useSettingsStore()
+  const { getDefault } = useConnectionsStore()
   const [usage, setUsage] = useState<ModelUsage[]>([])
   const [loading, setLoading] = useState(true)
   const [budgetDraft, setBudgetDraft] = useState(settings.monthlyBudgetUSD)
+  // Base price table fetched from the backend (keyed by model pattern).
+  const [basePrices, setBasePrices] = useState<Record<string, ModelPrice>>({})
 
   // New override row inputs
   const [newModel, setNewModel] = useState('')
@@ -49,14 +52,30 @@ export function CostsTab() {
 
   useEffect(refresh, [])
 
+  // Fetch the backend's base price table once (bulk, no probing).
+  useEffect(() => {
+    const conn = getDefault()
+    if (!conn) return
+    api.models
+      .metaTable(conn.id)
+      .then((table) => {
+        const prices: Record<string, ModelPrice> = {}
+        for (const [pattern, meta] of Object.entries(table)) {
+          if (meta.price) prices[pattern] = meta.price
+        }
+        setBasePrices(prices)
+      })
+      .catch(() => setBasePrices({}))
+  }, [getDefault])
+
   const overrides = settings.priceOverrides
 
   // Month-to-date cost, aggregated per model.
   const perModel = useMemo(() => {
     const map = new Map<string, { tokens: number; cost: number; priced: boolean }>()
     for (const u of usage) {
-      const cost = costFor(u.model, u.promptTokens, u.completionTokens, overrides)
-      const priced = priceForModel(u.model, overrides) !== null
+      const cost = costFor(u.model, u.promptTokens, u.completionTokens, basePrices, overrides)
+      const priced = priceForModel(u.model, basePrices, overrides) !== null
       const prev = map.get(u.model) ?? { tokens: 0, cost: 0, priced }
       map.set(u.model, {
         tokens: prev.tokens + u.promptTokens + u.completionTokens,
@@ -67,7 +86,7 @@ export function CostsTab() {
     return [...map.entries()]
       .map(([model, v]) => ({ model, ...v }))
       .sort((a, b) => b.cost - a.cost)
-  }, [usage, overrides])
+  }, [usage, basePrices, overrides])
 
   const totalCost = perModel.reduce((sum, m) => sum + m.cost, 0)
   const budget = settings.monthlyBudgetUSD
@@ -238,11 +257,11 @@ export function CostsTab() {
 
       <details>
         <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--mantine-color-dimmed)' }}>
-          Built-in prices ({Object.keys(BUILTIN_PRICING).length})
+          Built-in prices ({Object.keys(basePrices).length})
         </summary>
         <Table mt="sm">
           <Table.Tbody>
-            {Object.entries(BUILTIN_PRICING).map(([model, p]) => (
+            {Object.entries(basePrices).map(([model, p]) => (
               <Table.Tr key={model}>
                 <Table.Td style={{ fontFamily: 'monospace', fontSize: 12 }}>{model}</Table.Td>
                 <Table.Td>${p.input}</Table.Td>
