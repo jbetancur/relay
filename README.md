@@ -160,10 +160,7 @@ Switching models resets quality, size, and count to valid defaults for that mode
 The backend is not just a passthrough. It holds your API keys server-side, sidesteps the CORS restrictions that would block a browser from calling providers directly, records token usage, and runs the tool-calling and document-extraction endpoints. Routing happens entirely in the frontend: it decides which connection a request should use and sets the `X-Relay-Connection-ID` header. The proxy reads that header, swaps in the right upstream URL and key, and forwards the call.
 
 ```mermaid
----
-config:
-  layout: elk
----
+%%{init: {'flowchart': {'defaultRenderer': 'elk'}}}%%
 flowchart TD
     subgraph Browser["Browser (React SPA)"]
         UI["Chat & Image UI"]
