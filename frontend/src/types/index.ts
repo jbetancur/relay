@@ -49,6 +49,30 @@ export interface LogEntry {
   attrs?: Record<string, unknown>
 }
 
+// ── MCP servers ───────────────────────────────────────────────────────────────
+
+export interface MCPServer {
+  id: string
+  name: string
+  url: string
+  headers?: Record<string, string> // only present in single GET (write-only in list)
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export interface MCPServerInput {
+  name: string
+  url: string
+  headers: Record<string, string>
+  enabled: boolean
+}
+
+export interface MCPToolDef {
+  name: string
+  description: string
+}
+
 // ── Conversations ─────────────────────────────────────────────────────────────
 
 export type Role = 'user' | 'assistant' | 'system'
@@ -86,6 +110,9 @@ export interface Conversation {
   // Per-conversation override of the global context strategy; falls back to
   // settings.contextStrategy when unset.
   contextStrategy?: ContextStrategy
+  // MCP servers active for this conversation; their tools are offered to the
+  // model. Non-empty implies the agent (tool-calling) path for sends.
+  mcpServerIds?: string[]
 }
 
 // ── Models ────────────────────────────────────────────────────────────────────

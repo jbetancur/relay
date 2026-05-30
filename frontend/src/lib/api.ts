@@ -117,7 +117,7 @@ export const api = {
     // Tool-calling chat. Yields either assistant text deltas or structured tool
     // step events so the UI can show "Searching…" / results inline.
     async *stream(
-      body: { model: string; messages: Array<{ role: string; content: unknown }> },
+      body: { model: string; messages: Array<{ role: string; content: unknown }>; mcpServerIds?: string[] },
       connectionId?: string | null,
       signal?: AbortSignal
     ): AsyncGenerator<AgentEvent> {

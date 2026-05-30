@@ -19,6 +19,8 @@ import (
 
 	"github.com/johnbetancur/vision/backend/internal/config"
 	"github.com/johnbetancur/vision/backend/internal/connections"
+	"github.com/johnbetancur/vision/backend/internal/mcp"
+	"github.com/johnbetancur/vision/backend/internal/mcpservers"
 	"github.com/johnbetancur/vision/backend/internal/tools"
 )
 
@@ -27,14 +29,16 @@ const maxRounds = 5
 type Handler struct {
 	cfg       *config.Config
 	connStore *connections.Store
+	mcpStore  *mcpservers.Store
 	registry  *tools.Registry
 	client    *http.Client
 }
 
-func NewHandler(cfg *config.Config, connStore *connections.Store, registry *tools.Registry) *Handler {
+func NewHandler(cfg *config.Config, connStore *connections.Store, mcpStore *mcpservers.Store, registry *tools.Registry) *Handler {
 	return &Handler{
 		cfg:       cfg,
 		connStore: connStore,
+		mcpStore:  mcpStore,
 		registry:  registry,
 		client:    &http.Client{Timeout: 120 * time.Second},
 	}
@@ -59,8 +63,9 @@ type toolCall struct {
 }
 
 type agentRequest struct {
-	Model    string            `json:"model"`
-	Messages []upstreamMessage `json:"messages"`
+	Model        string            `json:"model"`
+	Messages     []upstreamMessage `json:"messages"`
+	MCPServerIDs []string          `json:"mcpServerIds,omitempty"`
 }
 
 // Chat handles POST /api/agent/chat.
@@ -88,7 +93,23 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	messages := req.Messages
-	specs := h.registry.Specs()
+
+	// Build the per-request registry: default tools + tools from each selected
+	// MCP server. A server that fails to connect is reported but doesn't abort
+	// the chat — its tools are simply not offered this turn.
+	registry := h.registry
+	if len(req.MCPServerIDs) > 0 {
+		extra, closers := h.collectMCPTools(ctx, req.MCPServerIDs, w, flusher)
+		defer func() {
+			for _, c := range closers {
+				c()
+			}
+		}()
+		if len(extra) > 0 {
+			registry = tools.NewRegistry(append(h.registry.All(), extra...)...)
+		}
+	}
+	specs := registry.Specs()
 
 	for round := 0; round < maxRounds; round++ {
 		resp, err := h.callUpstream(ctx, baseURL, apiKey, req.Model, messages, specs)
@@ -114,7 +135,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 				"name": tc.Function.Name,
 				"args": string(tc.Function.Arguments),
 			})
-			result := h.registry.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
+			result := registry.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
 			writeSSE(w, flusher, "tool_result", map[string]string{
 				"name":   tc.Function.Name,
 				"result": truncate(result, 2000),
@@ -131,6 +152,30 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	// Ran out of rounds without a final answer.
 	writeSSE(w, flusher, "error", map[string]string{"message": "tool loop exceeded max rounds"})
 	writeDone(w, flusher)
+}
+
+// collectMCPTools connects to each selected, enabled MCP server and gathers its
+// tools. Failures are surfaced as SSE error events but don't abort the chat.
+// Returns the tools plus closers to run when the request finishes.
+func (h *Handler) collectMCPTools(ctx context.Context, ids []string, w http.ResponseWriter, f http.Flusher) ([]tools.Tool, []func()) {
+	var collected []tools.Tool
+	var closers []func()
+	for _, id := range ids {
+		server, err := h.mcpStore.GetByID(id)
+		if err != nil || server == nil || !server.Enabled {
+			continue
+		}
+		ts, closer, err := mcp.Tools(ctx, server.Name, server.URL, server.Headers)
+		if err != nil {
+			writeSSE(w, f, "error", map[string]string{
+				"message": fmt.Sprintf("MCP server %q unavailable: %v", server.Name, err),
+			})
+			continue
+		}
+		collected = append(collected, ts...)
+		closers = append(closers, closer)
+	}
+	return collected, closers
 }
 
 func (h *Handler) resolveUpstream(connID string) (baseURL, apiKey string) {

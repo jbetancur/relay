@@ -41,6 +41,18 @@ CREATE TABLE IF NOT EXISTS usage_events (
 
 CREATE INDEX IF NOT EXISTS idx_usage_events_created ON usage_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_events_conn_model ON usage_events(connection_id, model);
+
+-- Remote MCP servers (Streamable HTTP). headers is a JSON object of static
+-- request headers (e.g. auth), stored server-side and never returned to clients.
+CREATE TABLE IF NOT EXISTS mcp_servers (
+	id          TEXT PRIMARY KEY,
+	name        TEXT NOT NULL,
+	url         TEXT NOT NULL,
+	headers     TEXT NOT NULL DEFAULT '{}',
+	enabled     INTEGER NOT NULL DEFAULT 1,
+	created_at  INTEGER NOT NULL,
+	updated_at  INTEGER NOT NULL
+);
 `
 
 func Open(path string) (*sql.DB, error) {

@@ -86,9 +86,9 @@ var builtins = map[string]tableEntry{
 	"mixtral": {Window: 32_768},
 	"gemini":  {Window: 1_000_000, Caps: []string{"vision"}},
 	// Image generation models
-	"dall-e-3":    {Caps: []string{"image"}},
-	"dall-e-2":    {Caps: []string{"image"}},
-	"gpt-image-1": {Caps: []string{"image"}},
+	"dall-e-3":         {Caps: []string{"image"}},
+	"dall-e-2":         {Caps: []string{"image"}},
+	"gpt-image-1":      {Caps: []string{"image"}},
 	"stable-diffusion": {Caps: []string{"image"}},
 	"flux":             {Caps: []string{"image"}},
 	"imagen":           {Caps: []string{"image"}},

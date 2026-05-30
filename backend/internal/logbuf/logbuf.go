@@ -22,9 +22,9 @@ const ringCap = 500
 
 // Hub holds the ring buffer and the set of live subscribers.
 type Hub struct {
-	mu    sync.RWMutex
-	ring  []Entry
-	subs  map[chan Entry]struct{}
+	mu   sync.RWMutex
+	ring []Entry
+	subs map[chan Entry]struct{}
 }
 
 func NewHub() *Hub {

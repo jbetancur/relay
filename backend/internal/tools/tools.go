@@ -47,6 +47,15 @@ func NewRegistry(ts ...Tool) *Registry {
 	return r
 }
 
+// All returns the registered tools, for composing a new registry.
+func (r *Registry) All() []Tool {
+	out := make([]Tool, 0, len(r.tools))
+	for _, t := range r.tools {
+		out = append(out, t)
+	}
+	return out
+}
+
 // Specs returns the tool specs to advertise to the model, or nil if empty.
 func (r *Registry) Specs() []ToolSpec {
 	if len(r.tools) == 0 {

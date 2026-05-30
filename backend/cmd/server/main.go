@@ -14,6 +14,7 @@ import (
 	"github.com/johnbetancur/vision/backend/internal/db"
 	"github.com/johnbetancur/vision/backend/internal/documents"
 	"github.com/johnbetancur/vision/backend/internal/logbuf"
+	"github.com/johnbetancur/vision/backend/internal/mcpservers"
 	"github.com/johnbetancur/vision/backend/internal/middleware"
 	"github.com/johnbetancur/vision/backend/internal/proxy"
 	"github.com/johnbetancur/vision/backend/internal/tools"
@@ -40,8 +41,10 @@ func main() {
 
 	connStore := connections.NewStore(database)
 	usageStore := usage.NewStore(database)
+	mcpStore := mcpservers.NewStore(database)
 	connHandler := connections.NewHandler(connStore, usageStore)
-	agentHandler := agent.NewHandler(cfg, connStore, tools.Default())
+	mcpHandler := mcpservers.NewHandler(mcpStore)
+	agentHandler := agent.NewHandler(cfg, connStore, mcpStore, tools.Default())
 
 	if apiBase := os.Getenv("API_BASE_URL"); apiBase != "" {
 		if err := connStore.Seed("Default", cfg.APIBaseURL, cfg.APIKey); err != nil {
@@ -75,6 +78,14 @@ func main() {
 		r.Post("/api/documents/extract", documents.Extract)
 		r.Post("/api/agent/chat", agentHandler.Chat)
 		r.Get("/api/logs/stream", logHub.Stream)
+
+		r.Get("/api/mcp-servers", mcpHandler.List)
+		r.Post("/api/mcp-servers", mcpHandler.Create)
+		r.Post("/api/mcp-servers/test", mcpHandler.Test)
+		r.Get("/api/mcp-servers/{id}", mcpHandler.Get)
+		r.Put("/api/mcp-servers/{id}", mcpHandler.Update)
+		r.Delete("/api/mcp-servers/{id}", mcpHandler.Delete)
+		r.Get("/api/mcp-servers/{id}/tools", mcpHandler.Tools)
 
 		r.Handle("/api/v1/*", proxy.New(cfg, connStore, usageStore))
 	})

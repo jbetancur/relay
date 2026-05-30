@@ -171,7 +171,13 @@ export function useChat(conversation: Conversation | undefined) {
         ...ctx.sent.map((m) => ({ role: m.role, content: m.content })),
       ]
 
-      if (settings.toolsEnabled) {
+      // The agent (tool-calling) path runs when tools are enabled globally OR
+      // this conversation has MCP servers selected. MCP servers' tools are
+      // offered via mcpServerIds.
+      const mcpServerIds = conversation.mcpServerIds ?? []
+      const useAgent = settings.toolsEnabled || mcpServerIds.length > 0
+
+      if (useAgent) {
         // #2 Tool-calling loop via the agent endpoint. Tool steps are shown as
         // a transient italic preamble; the final answer streams in after.
         addMessage(conversation.id, { role: 'assistant', content: '', route })
@@ -181,7 +187,7 @@ export function useChat(conversation: Conversation | undefined) {
         const abort = new AbortController()
         abortRef.current = abort
         try {
-          for await (const ev of api.agent.stream({ model, messages }, connectionId, abort.signal)) {
+          for await (const ev of api.agent.stream({ model, messages, mcpServerIds }, connectionId, abort.signal)) {
             if (ev.kind === 'content') {
               answer += ev.text
             } else if (ev.kind === 'tool_call') {

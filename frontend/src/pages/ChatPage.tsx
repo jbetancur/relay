@@ -45,6 +45,7 @@ import { MessageBubble } from '@/components/chat/MessageBubble'
 import { ContextGauge } from '@/components/chat/ContextGauge'
 import { MessageInput } from '@/components/chat/MessageInput'
 import { ModelSwitcher } from '@/components/chat/ModelSwitcher'
+import { MCPSelector } from '@/components/chat/MCPSelector'
 import { SystemPromptDrawer } from '@/components/chat/SystemPromptDrawer'
 import { ArtifactPanel, extractArtifacts } from '@/components/chat/ArtifactPanel'
 import type { Artifact } from '@/components/chat/ArtifactPanel'
@@ -65,7 +66,7 @@ interface ChatPageProps {
 export function ChatPage({ onToggleSidebar }: ChatPageProps) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { getConversation, createConversation, setModel, setConnection, setContextStrategy } = useConversationStore()
+  const { getConversation, createConversation, setModel, setConnection, setContextStrategy, setMcpServers } = useConversationStore()
   const { connections, getDefault } = useConnectionsStore()
   const { settings } = useSettingsStore()
   const [systemDrawerOpen, { open: openSystem, close: closeSystem }] = useDisclosure(false)
@@ -209,6 +210,11 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
           onChange={(model) => setModel(conversation.id, model)}
           group="chat"
           connectionId={effectiveConnectionId}
+        />
+
+        <MCPSelector
+          selectedIds={conversation.mcpServerIds ?? []}
+          onChange={(ids) => setMcpServers(conversation.id, ids)}
         />
 
         <Box flex={1} />
