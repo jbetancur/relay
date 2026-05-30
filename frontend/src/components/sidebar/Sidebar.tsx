@@ -17,6 +17,7 @@ import {
   IconSettings,
   IconLayoutSidebarLeftCollapse,
   IconAccessPoint,
+  IconTerminal2,
 } from '@tabler/icons-react'
 import { useNavigate, useParams } from 'react-router'
 import { useState } from 'react'
@@ -26,9 +27,10 @@ import { ConversationList } from './ConversationList'
 
 interface SidebarProps {
   onToggle: () => void
+  onToggleLogs: () => void
 }
 
-export function Sidebar({ onToggle }: SidebarProps) {
+export function Sidebar({ onToggle, onToggleLogs }: SidebarProps) {
   const navigate = useNavigate()
   const { id } = useParams()
   const [search, setSearch] = useState('')
@@ -91,6 +93,15 @@ export function Sidebar({ onToggle }: SidebarProps) {
           fullWidth
         >
           Image generation
+        </Button>
+        <Button
+          variant="subtle"
+          justify="start"
+          leftSection={<IconTerminal2 size={16} />}
+          onClick={onToggleLogs}
+          fullWidth
+        >
+          Logs
         </Button>
         <Button
           variant="subtle"

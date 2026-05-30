@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { useConversationStore, useConnectionsStore } from '@/store'
 
-export function useKeyboardShortcuts(toggleSidebar: () => void) {
+export function useKeyboardShortcuts(toggleSidebar: () => void, toggleLogs: () => void) {
   const navigate = useNavigate()
   const { createConversation, setConnection } = useConversationStore()
   const { getDefault } = useConnectionsStore()
@@ -41,9 +41,16 @@ export function useKeyboardShortcuts(toggleSidebar: () => void) {
         navigate('/images')
         return
       }
+
+      // Cmd/Ctrl+` — toggle log drawer
+      if (mod && e.key === '`') {
+        e.preventDefault()
+        toggleLogs()
+        return
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigate, toggleSidebar, createConversation, setConnection, getDefault])
+  }, [navigate, toggleSidebar, toggleLogs, createConversation, setConnection, getDefault])
 }

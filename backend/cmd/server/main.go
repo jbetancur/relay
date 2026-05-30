@@ -13,6 +13,7 @@ import (
 	"github.com/johnbetancur/vision/backend/internal/connections"
 	"github.com/johnbetancur/vision/backend/internal/db"
 	"github.com/johnbetancur/vision/backend/internal/documents"
+	"github.com/johnbetancur/vision/backend/internal/logbuf"
 	"github.com/johnbetancur/vision/backend/internal/middleware"
 	"github.com/johnbetancur/vision/backend/internal/proxy"
 	"github.com/johnbetancur/vision/backend/internal/tools"
@@ -20,8 +21,9 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	slog.SetDefault(logger)
+	logHub := logbuf.NewHub()
+	textHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+	slog.SetDefault(slog.New(logbuf.NewHandler(textHandler, logHub)))
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -70,6 +72,7 @@ func main() {
 		r.Get("/api/usage/by-model", connHandler.UsageByModel)
 		r.Post("/api/documents/extract", documents.Extract)
 		r.Post("/api/agent/chat", agentHandler.Chat)
+		r.Get("/api/logs/stream", logHub.Stream)
 
 		r.Handle("/api/v1/*", proxy.New(cfg, connStore, usageStore))
 	})

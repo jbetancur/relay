@@ -6,12 +6,14 @@ import { Sidebar } from '@/components/sidebar/Sidebar'
 import { ChatPage } from '@/pages/ChatPage'
 import { ImagePage } from '@/pages/ImagePage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { LogDrawer } from '@/components/logs/LogDrawer'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
 export default function App() {
   const [sidebarOpen, { toggle: toggleSidebar }] = useDisclosure(true)
+  const [logsOpen, { toggle: toggleLogs, close: closeLogs }] = useDisclosure(false)
 
-  useKeyboardShortcuts(toggleSidebar)
+  useKeyboardShortcuts(toggleSidebar, toggleLogs)
 
   return (
     <AppShell
@@ -23,7 +25,7 @@ export default function App() {
       padding={0}
     >
       <AppShell.Navbar>
-        <Sidebar onToggle={toggleSidebar} />
+        <Sidebar onToggle={toggleSidebar} onToggleLogs={toggleLogs} />
       </AppShell.Navbar>
 
       <AppShell.Main>
@@ -34,6 +36,8 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </AppShell.Main>
+
+      <LogDrawer opened={logsOpen} onClose={closeLogs} />
     </AppShell>
   )
 }

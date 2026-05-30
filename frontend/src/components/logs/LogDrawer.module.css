@@ -1,0 +1,43 @@
+.scroll {
+  height: calc(100% - 48px);
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+  font-size: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  white-space: nowrap;
+}
+
+.row[data-level='ERROR'] {
+  background: light-dark(rgba(224, 49, 49, 0.06), rgba(224, 49, 49, 0.12));
+}
+
+.row[data-level='WARN'] {
+  background: light-dark(rgba(245, 159, 0, 0.06), rgba(245, 159, 0, 0.1));
+}
+
+.time {
+  color: var(--mantine-color-dimmed);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.level {
+  flex-shrink: 0;
+}
+
+.msg {
+  color: var(--mantine-color-text);
+  flex-shrink: 0;
+}
+
+.attrs {
+  color: var(--mantine-color-dimmed);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

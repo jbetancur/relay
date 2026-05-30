@@ -40,6 +40,15 @@ export interface ModelUsage {
   completionTokens: number
 }
 
+// ── Logs ──────────────────────────────────────────────────────────────────────
+
+export interface LogEntry {
+  time: number // unix millis
+  level: string // DEBUG | INFO | WARN | ERROR
+  msg: string
+  attrs?: Record<string, unknown>
+}
+
 // ── Conversations ─────────────────────────────────────────────────────────────
 
 export type Role = 'user' | 'assistant' | 'system'
