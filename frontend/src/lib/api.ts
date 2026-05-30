@@ -3,6 +3,8 @@ import type {
   ChatCompletionChunk,
   ModelsResponse,
   ImageGenerationRequest,
+  ModelUsage,
+  AgentEvent,
 } from '@/types'
 
 const BASE = '/api'
@@ -92,6 +94,89 @@ export const api = {
         connectionId,
         signal
       )
+    },
+  },
+
+  usage: {
+    byModel(sinceMillis?: number): Promise<ModelUsage[]> {
+      const qs = sinceMillis ? `?since=${sinceMillis}` : ''
+      return request<ModelUsage[]>(`/usage/by-model${qs}`)
+    },
+  },
+
+  agent: {
+    // Tool-calling chat. Yields either assistant text deltas or structured tool
+    // step events so the UI can show "Searching…" / results inline.
+    async *stream(
+      body: { model: string; messages: Array<{ role: string; content: unknown }> },
+      connectionId?: string | null,
+      signal?: AbortSignal
+    ): AsyncGenerator<AgentEvent> {
+      const res = await fetch(`${BASE}/agent/chat`, {
+        method: 'POST',
+        headers: makeHeaders(connectionId),
+        body: JSON.stringify(body),
+        signal,
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => res.statusText)
+        throw new Error(`Agent error ${res.status}: ${text}`)
+      }
+
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        // SSE records are separated by a blank line.
+        const records = buffer.split('\n\n')
+        buffer = records.pop() ?? ''
+
+        for (const record of records) {
+          let event = 'message'
+          let data = ''
+          for (const line of record.split('\n')) {
+            if (line.startsWith('event: ')) event = line.slice(7).trim()
+            else if (line.startsWith('data: ')) data = line.slice(6)
+          }
+          if (!data) continue
+          if (data === '[DONE]') return
+
+          if (event === 'tool_call' || event === 'tool_result' || event === 'error') {
+            try {
+              yield { kind: event, payload: JSON.parse(data) }
+            } catch {
+              // skip malformed
+            }
+          } else {
+            // default content chunk (OpenAI-style)
+            try {
+              const chunk: ChatCompletionChunk = JSON.parse(data)
+              const content = chunk.choices[0]?.delta?.content
+              if (content) yield { kind: 'content', text: content }
+            } catch {
+              // skip malformed
+            }
+          }
+        }
+      }
+    },
+  },
+
+  documents: {
+    // Server-side extraction. PDFs are parsed to text; other files pass through.
+    async extract(file: File): Promise<{ name: string; text: string }> {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${BASE}/documents/extract`, { method: 'POST', body: form })
+      if (!res.ok) {
+        const text = await res.text().catch(() => res.statusText)
+        throw new Error(`Extract failed ${res.status}: ${text}`)
+      }
+      return res.json()
     },
   },
 

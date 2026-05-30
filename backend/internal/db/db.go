@@ -27,6 +27,20 @@ CREATE TABLE IF NOT EXISTS connection_stats (
 	completion_tokens INTEGER NOT NULL DEFAULT 0,
 	updated_at       INTEGER NOT NULL DEFAULT 0
 );
+
+-- Per-model, per-request usage events. Powers accurate cost reporting and
+-- month-to-date budgets (connection_stats only holds running totals).
+CREATE TABLE IF NOT EXISTS usage_events (
+	id                INTEGER PRIMARY KEY AUTOINCREMENT,
+	connection_id     TEXT NOT NULL,
+	model             TEXT NOT NULL DEFAULT '',
+	prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+	completion_tokens INTEGER NOT NULL DEFAULT 0,
+	created_at        INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_events_created ON usage_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_usage_events_conn_model ON usage_events(connection_id, model);
 `
 
 func Open(path string) (*sql.DB, error) {

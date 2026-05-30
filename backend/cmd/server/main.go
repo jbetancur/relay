@@ -9,10 +9,13 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/johnbetancur/vision/backend/internal/config"
+	"github.com/johnbetancur/vision/backend/internal/agent"
 	"github.com/johnbetancur/vision/backend/internal/connections"
 	"github.com/johnbetancur/vision/backend/internal/db"
+	"github.com/johnbetancur/vision/backend/internal/documents"
 	"github.com/johnbetancur/vision/backend/internal/middleware"
 	"github.com/johnbetancur/vision/backend/internal/proxy"
+	"github.com/johnbetancur/vision/backend/internal/tools"
 	"github.com/johnbetancur/vision/backend/internal/usage"
 )
 
@@ -36,6 +39,7 @@ func main() {
 	connStore := connections.NewStore(database)
 	usageStore := usage.NewStore(database)
 	connHandler := connections.NewHandler(connStore, usageStore)
+	agentHandler := agent.NewHandler(cfg, connStore, tools.Default())
 
 	if apiBase := os.Getenv("API_BASE_URL"); apiBase != "" {
 		if err := connStore.Seed("Default", cfg.APIBaseURL, cfg.APIKey); err != nil {
@@ -63,8 +67,11 @@ func main() {
 		r.Get("/api/connections/{id}/models", connHandler.Models)
 		r.Get("/api/connections/{id}/stats", connHandler.GetStats)
 		r.Delete("/api/connections/{id}/stats", connHandler.ResetStats)
+		r.Get("/api/usage/by-model", connHandler.UsageByModel)
+		r.Post("/api/documents/extract", documents.Extract)
+		r.Post("/api/agent/chat", agentHandler.Chat)
 
-		r.Handle("/api/*", proxy.New(cfg, connStore, usageStore))
+		r.Handle("/api/v1/*", proxy.New(cfg, connStore, usageStore))
 	})
 
 	slog.Info("relay backend listening", "port", cfg.Port)

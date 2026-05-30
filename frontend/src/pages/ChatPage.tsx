@@ -36,7 +36,7 @@ import { useParams, useNavigate } from 'react-router'
 
 import { useConversationStore, useConnectionsStore, useSettingsStore } from '@/store'
 import { useChat } from '@/hooks/useChat'
-import { isVisionModel } from '@/hooks/useModels'
+import { isVisionModel, useModels } from '@/hooks/useModels'
 import { useTokenCount } from '@/hooks/useTokenCount'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { MessageInput } from '@/components/chat/MessageInput'
@@ -105,6 +105,13 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
 
   const effectiveConnectionId = conversation?.connectionId ?? getDefault()?.id ?? null
   const enabledConnections = connections.filter((c) => c.enabled)
+
+  // #5 Other chat models on this connection, for "regenerate with another model".
+  const { grouped: connModels } = useModels(effectiveConnectionId)
+  const regenModels = connModels.chat
+    .map((m) => m.id)
+    .filter((id) => id !== conversation?.model)
+    .slice(0, 12)
 
   const supportsVision = isVisionModel(conversation?.model ?? '')
 
@@ -183,11 +190,36 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
         )}
 
         {canRegenerate && (
-          <Tooltip label="Regenerate response">
-            <ActionIcon variant="subtle" onClick={regenerate}>
-              <IconRefresh size={16} />
-            </ActionIcon>
-          </Tooltip>
+          <Group gap={2}>
+            <Tooltip label="Regenerate response">
+              <ActionIcon variant="subtle" onClick={() => regenerate()}>
+                <IconRefresh size={16} />
+              </ActionIcon>
+            </Tooltip>
+            {regenModels.length > 0 && (
+              <Menu shadow="md" width={240} position="bottom-end">
+                <Menu.Target>
+                  <Tooltip label="Regenerate with another model">
+                    <ActionIcon variant="subtle">
+                      <IconChevronDown size={14} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Label>Regenerate with…</Menu.Label>
+                  {regenModels.map((m) => (
+                    <Menu.Item
+                      key={m}
+                      onClick={() => regenerate(m)}
+                      style={{ fontFamily: 'monospace', fontSize: 12 }}
+                    >
+                      {m}
+                    </Menu.Item>
+                  ))}
+                </Menu.Dropdown>
+              </Menu>
+            )}
+          </Group>
         )}
 
         {artifacts.length > 0 && (

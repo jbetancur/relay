@@ -12,11 +12,12 @@ import {
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import { IconDeviceFloppy, IconPlug, IconAdjustments } from '@tabler/icons-react'
+import { IconDeviceFloppy, IconPlug, IconAdjustments, IconCoin } from '@tabler/icons-react'
 import { useSearchParams } from 'react-router'
 import { useSettingsStore, useConnectionsStore } from '@/store'
 import { ModelSwitcher } from '@/components/chat/ModelSwitcher'
 import { ConnectionsTab } from '@/components/connections/ConnectionsTab'
+import { CostsTab } from '@/components/settings/CostsTab'
 import classes from './SettingsPage.module.css'
 
 export function SettingsPage() {
@@ -32,6 +33,10 @@ export function SettingsPage() {
       defaultImageModel: settings.defaultImageModel,
       theme: settings.theme,
       streamingEnabled: settings.streamingEnabled,
+      autoRouteEnabled: settings.autoRouteEnabled,
+      autoRouteCheapModel: settings.autoRouteCheapModel,
+      autoRouteStrongModel: settings.autoRouteStrongModel,
+      toolsEnabled: settings.toolsEnabled,
     },
   })
 
@@ -55,6 +60,9 @@ export function SettingsPage() {
             </Tabs.Tab>
             <Tabs.Tab value="connections" leftSection={<IconPlug size={14} />}>
               Connections
+            </Tabs.Tab>
+            <Tabs.Tab value="costs" leftSection={<IconCoin size={14} />}>
+              Costs
             </Tabs.Tab>
           </Tabs.List>
 
@@ -94,6 +102,47 @@ export function SettingsPage() {
                   onChange={(e) => form.setFieldValue('streamingEnabled', e.currentTarget.checked)}
                 />
 
+                <Divider label="Tools" labelPosition="left" />
+
+                <Switch
+                  label="Tool use (web search)"
+                  description="Let the model call server-side tools like web search. Web search must still be configured by the operator; until then the model is told search is unavailable."
+                  checked={form.values.toolsEnabled}
+                  onChange={(e) => form.setFieldValue('toolsEnabled', e.currentTarget.checked)}
+                />
+
+                <Divider label="Auto-routing" labelPosition="left" />
+
+                <Switch
+                  label="Smart model routing"
+                  description="Automatically send short/simple prompts to a cheaper model and complex/code prompts to a stronger one."
+                  checked={form.values.autoRouteEnabled}
+                  onChange={(e) => form.setFieldValue('autoRouteEnabled', e.currentTarget.checked)}
+                />
+
+                {form.values.autoRouteEnabled && (
+                  <Group grow align="flex-start">
+                    <Stack gap="xs">
+                      <Text size="sm" fw={500}>Cheap model</Text>
+                      <ModelSwitcher
+                        value={form.values.autoRouteCheapModel}
+                        onChange={(v) => form.setFieldValue('autoRouteCheapModel', v)}
+                        group="chat"
+                        connectionId={defaultConnection?.id}
+                      />
+                    </Stack>
+                    <Stack gap="xs">
+                      <Text size="sm" fw={500}>Strong model</Text>
+                      <ModelSwitcher
+                        value={form.values.autoRouteStrongModel}
+                        onChange={(v) => form.setFieldValue('autoRouteStrongModel', v)}
+                        group="chat"
+                        connectionId={defaultConnection?.id}
+                      />
+                    </Stack>
+                  </Group>
+                )}
+
                 <Divider label="Appearance" labelPosition="left" />
 
                 <Select
@@ -117,6 +166,10 @@ export function SettingsPage() {
 
           <Tabs.Panel value="connections">
             <ConnectionsTab />
+          </Tabs.Panel>
+
+          <Tabs.Panel value="costs">
+            <CostsTab />
           </Tabs.Panel>
         </Tabs>
       </Box>

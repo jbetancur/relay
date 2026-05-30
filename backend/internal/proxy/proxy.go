@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"io"
@@ -17,6 +18,7 @@ import (
 )
 
 type usageBody struct {
+	Model string `json:"model"`
 	Usage struct {
 		PromptTokens     int64 `json:"prompt_tokens"`
 		CompletionTokens int64 `json:"completion_tokens"`
@@ -49,22 +51,32 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 			req.Out.URL.RawPath = strings.TrimPrefix(req.In.URL.RawPath, "/api")
 			req.Out.Host = target.Host
 
-			if connID != "" {
-				ctx := context.WithValue(req.Out.Context(), connIDKey{}, connID)
-				req.Out = req.Out.WithContext(ctx)
-			}
 			req.Out.Header.Del("X-Relay-Connection-ID")
 
 			if apiKey != "" {
 				req.Out.Header.Set("Authorization", "Bearer "+apiKey)
 			}
 
+			// Read the request body once: needed both for debug logging and to
+			// extract the model so usage can be attributed per-model.
+			var reqModel string
 			if req.Out.Body != nil {
 				body, _ := io.ReadAll(req.Out.Body)
 				req.Out.Body = io.NopCloser(bytes.NewReader(body))
+				var rb struct {
+					Model string `json:"model"`
+				}
+				_ = json.Unmarshal(body, &rb)
+				reqModel = rb.Model
 				slog.Debug("proxy request", "method", req.Out.Method, "url", req.Out.URL.String(), "body", string(body))
 			} else {
 				slog.Debug("proxy request", "method", req.Out.Method, "url", req.Out.URL.String())
+			}
+
+			if connID != "" {
+				ctx := context.WithValue(req.Out.Context(), connIDKey{}, connID)
+				ctx = context.WithValue(ctx, modelKey{}, reqModel)
+				req.Out = req.Out.WithContext(ctx)
 			}
 		},
 
@@ -79,7 +91,8 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 			if res.StatusCode >= 400 {
 				body, _ := io.ReadAll(res.Body)
 				res.Body = io.NopCloser(bytes.NewReader(body))
-				slog.Error("upstream error", "status", res.StatusCode, "url", res.Request.URL.String(), "body", string(body))
+				readable := decompress(res.Header.Get("Content-Encoding"), body)
+				slog.Error("upstream error", "status", res.StatusCode, "url", res.Request.URL.String(), "body", readable)
 				return nil
 			}
 
@@ -89,11 +102,12 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 			if connID == "" {
 				return nil
 			}
+			reqModel, _ := res.Request.Context().Value(modelKey{}).(string)
 
 			if isStream {
-				res.Body = newStreamingInterceptor(res.Body, connID, usageStore)
+				res.Body = newStreamingInterceptor(res.Body, connID, reqModel, usageStore)
 			} else {
-				recordFromBody(res, connID, usageStore)
+				recordFromBody(res, connID, reqModel, usageStore)
 			}
 
 			return nil
@@ -102,8 +116,22 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 }
 
 type connIDKey struct{}
+type modelKey struct{}
 
-func recordFromBody(res *http.Response, connID string, usageStore *usage.Store) {
+func decompress(encoding string, data []byte) string {
+	if strings.Contains(encoding, "gzip") {
+		r, err := gzip.NewReader(bytes.NewReader(data))
+		if err == nil {
+			defer r.Close()
+			if out, err := io.ReadAll(r); err == nil {
+				return string(out)
+			}
+		}
+	}
+	return string(data)
+}
+
+func recordFromBody(res *http.Response, connID, reqModel string, usageStore *usage.Store) {
 	body, err := io.ReadAll(res.Body)
 	res.Body.Close()
 	res.Body = io.NopCloser(bytes.NewReader(body))
@@ -118,21 +146,31 @@ func recordFromBody(res *http.Response, connID string, usageStore *usage.Store) 
 	if u.Usage.PromptTokens == 0 && u.Usage.CompletionTokens == 0 {
 		return
 	}
-	if err := usageStore.Record(connID, u.Usage.PromptTokens, u.Usage.CompletionTokens); err != nil {
+	if err := usageStore.Record(connID, pickModel(u.Model, reqModel), u.Usage.PromptTokens, u.Usage.CompletionTokens); err != nil {
 		slog.Error("usage record error", "err", err)
 	}
+}
+
+// pickModel prefers the model echoed by the upstream response, falling back to
+// the model from the original request.
+func pickModel(respModel, reqModel string) string {
+	if respModel != "" {
+		return respModel
+	}
+	return reqModel
 }
 
 type streamingInterceptor struct {
 	inner      io.ReadCloser
 	connID     string
+	reqModel   string
 	usageStore *usage.Store
 	buf        bytes.Buffer
 	done       bool
 }
 
-func newStreamingInterceptor(r io.ReadCloser, connID string, us *usage.Store) *streamingInterceptor {
-	return &streamingInterceptor{inner: r, connID: connID, usageStore: us}
+func newStreamingInterceptor(r io.ReadCloser, connID, reqModel string, us *usage.Store) *streamingInterceptor {
+	return &streamingInterceptor{inner: r, connID: connID, reqModel: reqModel, usageStore: us}
 }
 
 func (s *streamingInterceptor) Read(p []byte) (int, error) {
@@ -154,6 +192,7 @@ func (s *streamingInterceptor) Close() error {
 func (s *streamingInterceptor) extractAndRecord() {
 	data := s.buf.Bytes()
 	var best usageBody
+	model := s.reqModel
 	for _, line := range bytes.Split(data, []byte("\n")) {
 		line = bytes.TrimPrefix(line, []byte("data: "))
 		if len(line) == 0 || bytes.Equal(line, []byte("[DONE]")) {
@@ -161,6 +200,9 @@ func (s *streamingInterceptor) extractAndRecord() {
 		}
 		var u usageBody
 		if err := json.Unmarshal(line, &u); err == nil {
+			if u.Model != "" {
+				model = u.Model
+			}
 			if u.Usage.PromptTokens > 0 || u.Usage.CompletionTokens > 0 {
 				best = u
 			}
@@ -169,7 +211,7 @@ func (s *streamingInterceptor) extractAndRecord() {
 	if best.Usage.PromptTokens == 0 && best.Usage.CompletionTokens == 0 {
 		return
 	}
-	if err := s.usageStore.Record(s.connID, best.Usage.PromptTokens, best.Usage.CompletionTokens); err != nil {
+	if err := s.usageStore.Record(s.connID, model, best.Usage.PromptTokens, best.Usage.CompletionTokens); err != nil {
 		slog.Error("usage record (stream) error", "err", err)
 	}
 }

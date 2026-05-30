@@ -79,7 +79,7 @@ interface ImagePageProps {
 
 export function ImagePage({ onToggleSidebar }: ImagePageProps) {
   const { settings } = useSettingsStore()
-  const { connections, loading: connectionsLoading, getDefault } = useConnectionsStore()
+  const { connections, getDefault } = useConnectionsStore()
   const defaultConnectionId = getDefault()?.id ?? null
   const [connectionId, setConnectionId] = useState<string | null>(defaultConnectionId)
 

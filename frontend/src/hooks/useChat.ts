@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { api } from '@/lib/api'
 import { useConversationStore, useSettingsStore, useConnectionsStore } from '@/store'
+import { decideModel } from '@/lib/autoRoute'
 import type { Conversation, MessageContent } from '@/types'
 import type { FileAttachment } from '@/components/chat/MessageInput'
 
@@ -30,7 +31,7 @@ export function useChat(conversation: Conversation | undefined) {
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
-  const { addMessage, updateLastAssistantMessage, deleteLastMessages, truncateAfterMessage, renameConversation } = useConversationStore()
+  const { addMessage, updateLastAssistantMessage, deleteLastMessages, truncateAfterMessage, renameConversation, setModel } = useConversationStore()
   const { settings } = useSettingsStore()
   const { getDefault } = useConnectionsStore()
 
@@ -39,7 +40,12 @@ export function useChat(conversation: Conversation | undefined) {
   }, [])
 
   const send = useCallback(
-    async (text: string, imageDataUrls: string[] = [], attachments: FileAttachment[] = []) => {
+    async (
+      text: string,
+      imageDataUrls: string[] = [],
+      attachments: FileAttachment[] = [],
+      modelOverride?: string
+    ) => {
       if (!conversation) return
       setError(null)
 
@@ -66,7 +72,17 @@ export function useChat(conversation: Conversation | undefined) {
       addMessage(conversation.id, { role: 'user', content })
 
       const connectionId = conversation.connectionId ?? getDefault()?.id ?? null
-      const model = conversation.model || settings.defaultChatModel
+      // #5 explicit override wins; otherwise #3 auto-routing may pick a model;
+      // otherwise fall back to the conversation's own model / default.
+      const routed = modelOverride
+        ? null
+        : decideModel(fullText, {
+            enabled: settings.autoRouteEnabled,
+            cheap: settings.autoRouteCheapModel,
+            strong: settings.autoRouteStrongModel,
+          })
+      const model =
+        modelOverride || routed?.model || conversation.model || settings.defaultChatModel
       const isFirstExchange = conversation.messages.length === 0
       const messages = [
         ...(conversation.systemPrompt
@@ -76,7 +92,44 @@ export function useChat(conversation: Conversation | undefined) {
         { role: 'user' as const, content },
       ]
 
-      if (settings.streamingEnabled) {
+      if (settings.toolsEnabled) {
+        // #2 Tool-calling loop via the agent endpoint. Tool steps are shown as
+        // a transient italic preamble; the final answer streams in after.
+        addMessage(conversation.id, { role: 'assistant', content: '' })
+        setStreaming(true)
+        let steps = ''
+        let answer = ''
+        const abort = new AbortController()
+        abortRef.current = abort
+        try {
+          for await (const ev of api.agent.stream({ model, messages }, connectionId, abort.signal)) {
+            if (ev.kind === 'content') {
+              answer += ev.text
+            } else if (ev.kind === 'tool_call') {
+              steps += `> 🔧 *Calling \`${ev.payload.name}\`…*\n\n`
+            } else if (ev.kind === 'tool_result') {
+              steps += `> ↳ *${ev.payload.name} returned.*\n\n`
+            } else if (ev.kind === 'error') {
+              setError(ev.payload.message)
+            }
+            // While tools run, show steps; once the answer starts, show only it.
+            updateLastAssistantMessage(conversation.id, answer || steps)
+          }
+        } catch (e) {
+          if ((e as Error).name !== 'AbortError') {
+            setError(e instanceof Error ? e.message : 'Agent error')
+            if (!answer) updateLastAssistantMessage(conversation.id, '_(error)_')
+          }
+        } finally {
+          abortRef.current = null
+          setStreaming(false)
+          if (isFirstExchange && answer) {
+            generateTitle(fullText, answer, model, connectionId)
+              .then((title) => { if (title) renameConversation(conversation.id, title) })
+              .catch(() => {/* best-effort */})
+          }
+        }
+      } else if (settings.streamingEnabled) {
         addMessage(conversation.id, { role: 'assistant', content: '' })
         setStreaming(true)
         let accumulated = ''
@@ -136,7 +189,8 @@ export function useChat(conversation: Conversation | undefined) {
   )
 
   // Remove the last user+assistant exchange and resend.
-  const regenerate = useCallback(async () => {
+  // #5 optional modelOverride re-runs the same prompt on a different model.
+  const regenerate = useCallback(async (modelOverride?: string) => {
     if (!conversation) return
     const msgs = conversation.messages
     if (msgs.length < 2) return
@@ -152,8 +206,11 @@ export function useChat(conversation: Conversation | undefined) {
     const images = typeof userContent === 'string' ? []
       : userContent.filter(c => c.type === 'image_url').map(c => c.image_url!.url)
 
-    await send(text, images, [])
-  }, [conversation, deleteLastMessages, send])
+    // If regenerating on a specific model, persist it as the conversation's
+    // model so subsequent turns continue there.
+    if (modelOverride) setModel(conversation.id, modelOverride)
+    await send(text, images, [], modelOverride)
+  }, [conversation, deleteLastMessages, send, setModel])
 
   // Edit a specific user message: truncate everything from that message onward, then resend.
   const editAndResend = useCallback(async (messageId: string, newText: string) => {

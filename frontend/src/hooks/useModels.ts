@@ -28,7 +28,10 @@ export function useModels(connectionId?: string | null) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (connectionId === null) return
+    if (connectionId === null || connectionId === undefined) {
+      setLoading(false)
+      return
+    }
     let cancelled = false
     setLoading(true)
     api.models

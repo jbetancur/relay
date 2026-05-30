@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -148,6 +149,27 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+// UsageByModel returns per-model token totals across all connections, optionally
+// filtered to events at or after the `since` query param (unix millis). The
+// frontend multiplies these by its pricing table to compute cost/budgets.
+func (h *Handler) UsageByModel(w http.ResponseWriter, r *http.Request) {
+	var since int64
+	if v := r.URL.Query().Get("since"); v != "" {
+		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+			since = parsed
+		}
+	}
+	rows, err := h.usageStore.UsageByModel(since)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if rows == nil {
+		rows = []usage.ModelUsage{}
+	}
+	writeJSON(w, http.StatusOK, rows)
 }
 
 func (h *Handler) ResetStats(w http.ResponseWriter, r *http.Request) {

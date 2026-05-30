@@ -159,6 +159,12 @@ export const useSettingsStore = create<SettingsState>()(
         defaultImageModel: '',
         theme: 'dark',
         streamingEnabled: true,
+        autoRouteEnabled: false,
+        autoRouteCheapModel: '',
+        autoRouteStrongModel: '',
+        priceOverrides: {},
+        monthlyBudgetUSD: 0,
+        toolsEnabled: false,
       },
       updateSettings(patch) {
         set((s) => ({ settings: { ...s.settings, ...patch } }))
@@ -166,15 +172,25 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'relay-settings',
-      version: 2,
+      version: 3,
       migrate(state: unknown, version: number) {
+        const root = (state ?? {}) as Record<string, unknown>
+        const s = (root.settings ?? root) as Record<string, unknown>
         if (version < 2) {
-          const old = state as Record<string, unknown>
-          delete old.apiBaseUrl
-          delete old.apiKey
-          return old
+          delete s.apiBaseUrl
+          delete s.apiKey
         }
-        return state as SettingsState
+        if (version < 3) {
+          // Backfill fields added in v3 so existing persisted state stays valid.
+          s.autoRouteEnabled ??= false
+          s.autoRouteCheapModel ??= ''
+          s.autoRouteStrongModel ??= ''
+          s.priceOverrides ??= {}
+          s.monthlyBudgetUSD ??= 0
+          s.toolsEnabled ??= false
+        }
+        root.settings = s
+        return root as unknown as SettingsState
       },
     }
   )

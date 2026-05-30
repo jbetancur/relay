@@ -32,6 +32,14 @@ export interface ConnectionStats {
   updatedAt: number
 }
 
+export interface ModelUsage {
+  connectionId: string
+  model: string
+  requestCount: number
+  promptTokens: number
+  completionTokens: number
+}
+
 // ── Conversations ─────────────────────────────────────────────────────────────
 
 export type Role = 'user' | 'assistant' | 'system'
@@ -101,6 +109,14 @@ export interface ChatCompletionChunk {
   }>
 }
 
+// ── Agent / tool-calling ────────────────────────────────────────────────────
+
+export type AgentEvent =
+  | { kind: 'content'; text: string }
+  | { kind: 'tool_call'; payload: { name: string; args: string } }
+  | { kind: 'tool_result'; payload: { name: string; result: string } }
+  | { kind: 'error'; payload: { message: string } }
+
 // ── Image API ─────────────────────────────────────────────────────────────────
 
 export type ImageSize =
@@ -140,9 +156,26 @@ export interface GeneratedImage {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
+export interface ModelPriceOverride {
+  input: number
+  output: number
+}
+
 export interface AppSettings {
   defaultChatModel: string
   defaultImageModel: string
   theme: 'light' | 'dark' | 'auto'
   streamingEnabled: boolean
+  // #3 Auto-routing: when on, short/simple prompts route to a cheap model and
+  // complex/code prompts to a strong model (within the active connection).
+  autoRouteEnabled: boolean
+  autoRouteCheapModel: string
+  autoRouteStrongModel: string
+  // #9 Cost: per-model price overrides ($/1M tokens) and an optional monthly
+  // budget in USD. Empty/zero budget means "no budget".
+  priceOverrides: Record<string, ModelPriceOverride>
+  monthlyBudgetUSD: number
+  // #2 Tool use: when on, chat routes through the agent loop so the model can
+  // call server-side tools (e.g. web search).
+  toolsEnabled: boolean
 }

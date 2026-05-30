@@ -11,6 +11,9 @@ import {
   Badge,
 } from '@mantine/core'
 import { IconSend, IconPhoto, IconPlayerStop, IconPaperclip } from '@tabler/icons-react'
+import { Loader } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
+import { api } from '@/lib/api'
 import classes from './MessageInput.module.css'
 
 export interface FileAttachment {
@@ -39,6 +42,7 @@ export function MessageInput({
   const [text, setText] = useState('')
   const [images, setImages] = useState<string[]>([])
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
+  const [extracting, setExtracting] = useState(0)
   const imageFileRef = useRef<HTMLInputElement>(null)
   const attachFileRef = useRef<HTMLInputElement>(null)
 
@@ -77,17 +81,32 @@ export function MessageInput({
 
   function handleAttachFiles(files: FileList | null) {
     if (!files) return
-    Array.from(files).forEach((file) => {
+    Array.from(files).forEach(async (file) => {
       const isText = file.type.startsWith('text/') || file.name.endsWith('.md') || file.name.endsWith('.csv')
-      const isPdf = file.type === 'application/pdf'
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
       if (!isText && !isPdf) return
+
+      if (isPdf) {
+        // PDFs can't be read as text in the browser — extract server-side.
+        setExtracting((n) => n + 1)
+        try {
+          const { text } = await api.documents.extract(file)
+          setAttachments((prev) => [...prev, { name: file.name, content: text, type: 'pdf' }])
+        } catch (e) {
+          notifications.show({
+            color: 'red',
+            message: e instanceof Error ? e.message : `Could not read ${file.name}`,
+          })
+        } finally {
+          setExtracting((n) => n - 1)
+        }
+        return
+      }
+
       const reader = new FileReader()
       reader.onload = (e) => {
         const content = e.target?.result as string
-        setAttachments((prev) => [
-          ...prev,
-          { name: file.name, content, type: isPdf ? 'pdf' : 'text' },
-        ])
+        setAttachments((prev) => [...prev, { name: file.name, content, type: 'text' }])
       }
       reader.readAsText(file)
     })
@@ -188,14 +207,14 @@ export function MessageInput({
           style={{ display: 'none' }}
           onChange={(e) => { handleAttachFiles(e.target.files); e.target.value = '' }}
         />
-        <Tooltip label="Attach file (txt, md, csv, pdf)">
+        <Tooltip label={extracting > 0 ? 'Extracting…' : 'Attach file (txt, md, csv, pdf)'}>
           <ActionIcon
             variant="subtle"
             size="lg"
             onClick={() => attachFileRef.current?.click()}
-            disabled={disabled || streaming}
+            disabled={disabled || streaming || extracting > 0}
           >
-            <IconPaperclip size={18} />
+            {extracting > 0 ? <Loader size={16} /> : <IconPaperclip size={18} />}
           </ActionIcon>
         </Tooltip>
 
