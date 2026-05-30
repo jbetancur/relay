@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
 import { api } from '@/lib/api'
 import { useConversationStore, useSettingsStore, useConnectionsStore } from '@/store'
-import { decideModel } from '@/lib/autoRoute'
-import type { Conversation, MessageContent } from '@/types'
+import { resolveRoute } from '@/lib/autoRoute'
+import type { Conversation, MessageContent, RouteCategory } from '@/types'
 import type { FileAttachment } from '@/components/chat/MessageInput'
 
 async function generateTitle(
@@ -29,6 +29,7 @@ async function generateTitle(
 
 export function useChat(conversation: Conversation | undefined) {
   const [streaming, setStreaming] = useState(false)
+  const [routing, setRouting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const { addMessage, updateLastAssistantMessage, deleteLastMessages, truncateAfterMessage, renameConversation, setModel } = useConversationStore()
@@ -71,18 +72,25 @@ export function useChat(conversation: Conversation | undefined) {
 
       addMessage(conversation.id, { role: 'user', content })
 
-      const connectionId = conversation.connectionId ?? getDefault()?.id ?? null
-      // #5 explicit override wins; otherwise #3 auto-routing may pick a model;
-      // otherwise fall back to the conversation's own model / default.
-      const routed = modelOverride
-        ? null
-        : decideModel(fullText, {
-            enabled: settings.autoRouteEnabled,
-            cheap: settings.autoRouteCheapModel,
-            strong: settings.autoRouteStrongModel,
-          })
+      // #5 explicit override wins; otherwise #3 auto-routing may pick a model +
+      // connection (across providers); otherwise the conversation's own model.
+      let routed: { model: string; connectionId: string | null; category: RouteCategory } | null = null
+      if (!modelOverride && settings.autoRouteEnabled) {
+        setRouting(true)
+        try {
+          routed = await resolveRoute(fullText, settings)
+        } catch {
+          routed = null // any routing failure → fall through to conversation model
+        } finally {
+          setRouting(false)
+        }
+      }
+      // A routed connection (when set) overrides the conversation's connection.
+      const connectionId =
+        routed?.connectionId ?? conversation.connectionId ?? getDefault()?.id ?? null
       const model =
         modelOverride || routed?.model || conversation.model || settings.defaultChatModel
+      const route = routed ? { category: routed.category, model: routed.model } : undefined
       const isFirstExchange = conversation.messages.length === 0
       const messages = [
         ...(conversation.systemPrompt
@@ -95,7 +103,7 @@ export function useChat(conversation: Conversation | undefined) {
       if (settings.toolsEnabled) {
         // #2 Tool-calling loop via the agent endpoint. Tool steps are shown as
         // a transient italic preamble; the final answer streams in after.
-        addMessage(conversation.id, { role: 'assistant', content: '' })
+        addMessage(conversation.id, { role: 'assistant', content: '', route })
         setStreaming(true)
         let steps = ''
         let answer = ''
@@ -130,7 +138,7 @@ export function useChat(conversation: Conversation | undefined) {
           }
         }
       } else if (settings.streamingEnabled) {
-        addMessage(conversation.id, { role: 'assistant', content: '' })
+        addMessage(conversation.id, { role: 'assistant', content: '', route })
         setStreaming(true)
         let accumulated = ''
         const abort = new AbortController()
@@ -170,7 +178,7 @@ export function useChat(conversation: Conversation | undefined) {
             abort.signal
           )
           const reply = res.choices[0]?.message?.content ?? ''
-          addMessage(conversation.id, { role: 'assistant', content: reply })
+          addMessage(conversation.id, { role: 'assistant', content: reply, route })
           if (isFirstExchange && reply) {
             generateTitle(fullText, reply, model, connectionId)
               .then((title) => { if (title) renameConversation(conversation.id, title) })
@@ -226,5 +234,5 @@ export function useChat(conversation: Conversation | undefined) {
     await send(newText, images, [])
   }, [conversation, truncateAfterMessage, send])
 
-  return { send, stop, regenerate, editAndResend, streaming, error }
+  return { send, stop, regenerate, editAndResend, streaming, routing, error }
 }

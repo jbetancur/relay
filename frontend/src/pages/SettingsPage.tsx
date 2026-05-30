@@ -18,7 +18,16 @@ import { useSettingsStore, useConnectionsStore } from '@/store'
 import { ModelSwitcher } from '@/components/chat/ModelSwitcher'
 import { ConnectionsTab } from '@/components/connections/ConnectionsTab'
 import { CostsTab } from '@/components/settings/CostsTab'
+import { SlotPicker } from '@/components/settings/SlotPicker'
+import type { RouteCategory, RouteSlot } from '@/types'
 import classes from './SettingsPage.module.css'
+
+const ROUTE_SLOTS: Array<{ key: RouteCategory; label: string; hint: string }> = [
+  { key: 'fast', label: 'Fast', hint: 'Short Q&A and simple tasks. Also used as the classifier that routes every prompt.' },
+  { key: 'coding', label: 'Coding', hint: 'Code generation, debugging, refactoring.' },
+  { key: 'creative', label: 'Creative', hint: 'Writing, stories, brainstorming, tone.' },
+  { key: 'reasoning', label: 'Reasoning', hint: 'Math, logic, analysis, multi-step problems.' },
+]
 
 export function SettingsPage() {
   const { settings, updateSettings } = useSettingsStore()
@@ -34,8 +43,8 @@ export function SettingsPage() {
       theme: settings.theme,
       streamingEnabled: settings.streamingEnabled,
       autoRouteEnabled: settings.autoRouteEnabled,
-      autoRouteCheapModel: settings.autoRouteCheapModel,
-      autoRouteStrongModel: settings.autoRouteStrongModel,
+      routeSlots: settings.routeSlots,
+      routeFallback: settings.routeFallback,
       toolsEnabled: settings.toolsEnabled,
     },
   })
@@ -115,32 +124,39 @@ export function SettingsPage() {
 
                 <Switch
                   label="Smart model routing"
-                  description="Automatically send short/simple prompts to a cheaper model and complex/code prompts to a stronger one."
+                  description="A classifier sorts each prompt into a category and sends it to that category's model — across any of your connections."
                   checked={form.values.autoRouteEnabled}
                   onChange={(e) => form.setFieldValue('autoRouteEnabled', e.currentTarget.checked)}
                 />
 
                 {form.values.autoRouteEnabled && (
-                  <Group grow align="flex-start">
-                    <Stack gap="xs">
-                      <Text size="sm" fw={500}>Cheap model</Text>
-                      <ModelSwitcher
-                        value={form.values.autoRouteCheapModel}
-                        onChange={(v) => form.setFieldValue('autoRouteCheapModel', v)}
-                        group="chat"
-                        connectionId={defaultConnection?.id}
+                  <Stack gap="lg">
+                    {ROUTE_SLOTS.map(({ key, label, hint }) => (
+                      <SlotPicker
+                        key={key}
+                        label={label}
+                        hint={hint}
+                        value={form.values.routeSlots[key]}
+                        onChange={(slot: RouteSlot | undefined) =>
+                          form.setFieldValue('routeSlots', {
+                            ...form.values.routeSlots,
+                            [key]: slot,
+                          })
+                        }
                       />
-                    </Stack>
-                    <Stack gap="xs">
-                      <Text size="sm" fw={500}>Strong model</Text>
-                      <ModelSwitcher
-                        value={form.values.autoRouteStrongModel}
-                        onChange={(v) => form.setFieldValue('autoRouteStrongModel', v)}
-                        group="chat"
-                        connectionId={defaultConnection?.id}
-                      />
-                    </Stack>
-                  </Group>
+                    ))}
+                    <Select
+                      label="Fallback"
+                      description="Used when the classifier can't decide or its connection is unavailable."
+                      data={[
+                        { value: 'conversation', label: "Conversation's current model" },
+                        { value: 'fast', label: 'Fast slot' },
+                      ]}
+                      value={form.values.routeFallback}
+                      onChange={(v) => v && form.setFieldValue('routeFallback', v as 'conversation' | 'fast')}
+                      maw={320}
+                    />
+                  </Stack>
                 )}
 
                 <Divider label="Appearance" labelPosition="left" />

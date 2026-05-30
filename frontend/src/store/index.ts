@@ -160,8 +160,8 @@ export const useSettingsStore = create<SettingsState>()(
         theme: 'dark',
         streamingEnabled: true,
         autoRouteEnabled: false,
-        autoRouteCheapModel: '',
-        autoRouteStrongModel: '',
+        routeSlots: {},
+        routeFallback: 'conversation',
         priceOverrides: {},
         monthlyBudgetUSD: 0,
         toolsEnabled: false,
@@ -172,7 +172,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'relay-settings',
-      version: 3,
+      version: 4,
       migrate(state: unknown, version: number) {
         const root = (state ?? {}) as Record<string, unknown>
         const s = (root.settings ?? root) as Record<string, unknown>
@@ -183,11 +183,16 @@ export const useSettingsStore = create<SettingsState>()(
         if (version < 3) {
           // Backfill fields added in v3 so existing persisted state stays valid.
           s.autoRouteEnabled ??= false
-          s.autoRouteCheapModel ??= ''
-          s.autoRouteStrongModel ??= ''
           s.priceOverrides ??= {}
           s.monthlyBudgetUSD ??= 0
           s.toolsEnabled ??= false
+        }
+        if (version < 4) {
+          // v4 replaces the cheap/strong pair with category slots + a fallback.
+          delete s.autoRouteCheapModel
+          delete s.autoRouteStrongModel
+          s.routeSlots ??= {}
+          s.routeFallback ??= 'conversation'
         }
         root.settings = s
         return root as unknown as SettingsState

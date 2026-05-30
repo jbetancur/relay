@@ -139,6 +139,13 @@ export function MessageBubble({ message, isStreaming, onEdit }: MessageBubblePro
         </Box>
 
         <Box className={classes.actions}>
+          {!isUser && message.route && (
+            <Tooltip label={`Routed to ${message.route.model}`} withArrow>
+              <Badge size="xs" variant="light" color="violet" radius="sm" style={{ textTransform: 'none' }}>
+                {message.route.category}
+              </Badge>
+            </Tooltip>
+          )}
           {isUser && !isStreaming && onEdit && (
             editing ? (
               <>
@@ -164,7 +171,7 @@ export function MessageBubble({ message, isStreaming, onEdit }: MessageBubblePro
           {!isUser && !isStreaming && textContent && (
             <CopyButton value={textContent} timeout={1500}>
               {({ copied, copy }) => (
-                <Tooltip label={copied ? 'Copied' : 'Copy'} withArrow>
+                <Tooltip label={copied ? 'Copied!' : 'Copy markdown'} withArrow>
                   <ActionIcon
                     size="xs"
                     variant="subtle"

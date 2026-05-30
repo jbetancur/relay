@@ -83,7 +83,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
   }, [id, createConversation, navigate, getDefault, setConnection])
 
   const conversation = id && id !== 'new' ? getConversation(id) : undefined
-  const { send, stop, regenerate, editAndResend, streaming, error } = useChat(conversation)
+  const { send, stop, regenerate, editAndResend, streaming, routing, error } = useChat(conversation)
   const tokenCount = useTokenCount(conversation)
 
   // Auto-scroll to bottom on new messages/streaming
@@ -346,7 +346,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
             onSend={(text, images, attachments) => send(text, images, attachments)}
             onStop={stop}
             disabled={!conversation.model || !hasConnections}
-            streaming={streaming}
+            streaming={streaming || routing}
             supportsVision={supportsVision}
           />
         </Box>

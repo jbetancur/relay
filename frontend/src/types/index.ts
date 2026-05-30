@@ -55,6 +55,9 @@ export interface Message {
   role: Role
   content: string | MessageContent[]
   createdAt: number
+  // #routing: when auto-routing picked this assistant turn's model, record the
+  // category + model so the UI can surface why. Absent on older/un-routed messages.
+  route?: { category: RouteCategory; model: string }
 }
 
 export interface Conversation {
@@ -161,16 +164,27 @@ export interface ModelPriceOverride {
   output: number
 }
 
+// #3 Auto-routing: an LLM classifier picks a category per prompt; each category
+// maps to a model on any connection, so routing can span providers.
+export type RouteCategory = 'coding' | 'creative' | 'reasoning' | 'fast'
+
+export interface RouteSlot {
+  model: string
+  connectionId: string | null // null = use the conversation's own connection
+}
+
 export interface AppSettings {
   defaultChatModel: string
   defaultImageModel: string
   theme: 'light' | 'dark' | 'auto'
   streamingEnabled: boolean
-  // #3 Auto-routing: when on, short/simple prompts route to a cheap model and
-  // complex/code prompts to a strong model (within the active connection).
+  // #3 Auto-routing: when on, a classifier sorts each prompt into a category and
+  // the message is sent to that category's configured model + connection.
   autoRouteEnabled: boolean
-  autoRouteCheapModel: string
-  autoRouteStrongModel: string
+  routeSlots: Partial<Record<RouteCategory, RouteSlot>>
+  // On classifier failure/timeout, fall back to the conversation's own model or
+  // the Fast slot.
+  routeFallback: 'conversation' | 'fast'
   // #9 Cost: per-model price overrides ($/1M tokens) and an optional monthly
   // budget in USD. Empty/zero budget means "no budget".
   priceOverrides: Record<string, ModelPriceOverride>
