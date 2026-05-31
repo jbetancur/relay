@@ -74,6 +74,7 @@ func main() {
 		r.Get("/api/connections/{id}/model-meta", connHandler.ModelMeta)
 		r.Get("/api/connections/{id}/stats", connHandler.GetStats)
 		r.Delete("/api/connections/{id}/stats", connHandler.ResetStats)
+		r.Get("/api/connections/{id}/balance", connHandler.Balance)
 		r.Get("/api/usage/by-model", connHandler.UsageByModel)
 		r.Post("/api/documents/extract", documents.Extract)
 		r.Post("/api/agent/chat", agentHandler.Chat)

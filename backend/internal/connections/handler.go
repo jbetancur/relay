@@ -217,6 +217,65 @@ func (h *Handler) Test(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Balance fetches the remaining credit balance from providers that expose one.
+// Currently only OpenRouter is supported (detected by base URL).
+func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	conn, err := h.store.GetByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if conn == nil {
+		writeError(w, http.StatusNotFound, "connection not found")
+		return
+	}
+
+	if !strings.Contains(conn.BaseURL, "openrouter.ai") {
+		writeError(w, http.StatusNotFound, "balance not supported for this provider")
+		return
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://openrouter.ai/api/v1/credits", nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("build request: %v", err))
+		return
+	}
+	if conn.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+conn.APIKey)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("upstream error: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		writeError(w, http.StatusBadGateway, upstreamMessage(body, resp.StatusCode))
+		return
+	}
+
+	var result struct {
+		Data struct {
+			TotalCredits float64 `json:"total_credits"`
+			TotalUsage   float64 `json:"total_usage"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		writeError(w, http.StatusBadGateway, "failed to parse balance response")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total_credits":     result.Data.TotalCredits,
+		"total_usage":       result.Data.TotalUsage,
+		"credits_remaining": result.Data.TotalCredits - result.Data.TotalUsage,
+	})
+}
+
 // upstreamMessage pulls a human-readable error from an OpenAI-style error body,
 // falling back to the raw text / status.
 func upstreamMessage(body []byte, status int) string {

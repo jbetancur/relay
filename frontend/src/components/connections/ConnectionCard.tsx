@@ -10,11 +10,13 @@ import {
   Switch,
   Divider,
   SimpleGrid,
+  Skeleton,
 } from '@mantine/core'
-import { IconPencil, IconTrash, IconPlugConnected, IconRefresh } from '@tabler/icons-react'
+import { IconPencil, IconTrash, IconPlugConnected, IconRefresh, IconWallet } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import type { Connection } from '@/types'
 import { useConnectionStats } from '@/hooks/useConnectionStats'
+import { useConnectionBalance } from '@/hooks/useConnectionBalance'
 
 const TYPE_COLORS: Record<string, string> = {
   openai: 'teal',
@@ -80,6 +82,7 @@ export function ConnectionCard({
 }: ConnectionCardProps) {
   const [testing, setTesting] = useState(false)
   const { stats, loading: statsLoading, refresh, reset } = useConnectionStats(connection.id)
+  const { balance, loading: balanceLoading, error: balanceError, refresh: refreshBalance, isSupported: balanceSupported } = useConnectionBalance(connection.id, connection.baseUrl)
 
   const hasStats = stats !== null && stats.requestCount > 0
 
@@ -174,6 +177,35 @@ export function ConnectionCard({
           </Tooltip>
         </Group>
       </Group>
+
+      {/* Provider balance (OpenRouter only) */}
+      {balanceSupported && (
+        <>
+          <Divider my="xs" />
+          <Group gap="xs" align="center">
+            <IconWallet size={13} style={{ opacity: 0.5 }} />
+            {balanceLoading ? (
+              <Skeleton height={14} width={80} />
+            ) : balanceError ? (
+              <Tooltip label={balanceError} withArrow>
+                <Text size="xs" c="red">Balance unavailable</Text>
+              </Tooltip>
+            ) : balance ? (
+              <Group gap={6}>
+                <Text size="xs" fw={600}>${balance.credits_remaining.toFixed(2)}</Text>
+                <Text size="xs" c="dimmed">remaining</Text>
+                <Text size="xs" c="dimmed">·</Text>
+                <Text size="xs" c="dimmed">${balance.total_usage.toFixed(2)} used of ${balance.total_credits.toFixed(2)}</Text>
+              </Group>
+            ) : null}
+            <Tooltip label="Refresh balance">
+              <ActionIcon variant="subtle" size="xs" color="gray" onClick={refreshBalance} aria-label="Refresh balance">
+                <IconRefresh size={11} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+        </>
+      )}
 
       {/* Usage stats */}
       {!statsLoading && (
