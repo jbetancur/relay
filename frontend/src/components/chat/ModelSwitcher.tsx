@@ -56,7 +56,8 @@ export function ModelSwitcher({ value, onChange, group = 'chat', connectionId }:
   if (recents.length > 0) {
     data.push({ group: 'Recent', items: recents.map((id) => ({ value: id, label: id })) })
   }
-  data.push({ group: 'Models', items: modelItems })
+  const recentSet = new Set(recents)
+  data.push({ group: 'Models', items: modelItems.filter((i) => !recentSet.has(i.value)) })
 
   // Always keep the current value selectable even if collapsed/filtered out.
   if (value && !modelItems.find((i) => i.value === value) && !recents.includes(value)) {
