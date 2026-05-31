@@ -77,6 +77,9 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const userScrolledUp = useRef(false)
+  // Tracks which conversation we've already done the initial jump-to-bottom for,
+  // so opening an existing chat lands at the bottom instantly instead of animating.
+  const initialScrollDone = useRef<string | null>(null)
 
   // Create conversation on /c/new
   useEffect(() => {
@@ -116,12 +119,20 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
     return { droppedIds, perMessageTokens }
   }, [conversation, contextStrategy, contextWindow, settings.contextBudgetFraction, settings.contextReplyHeadroom])
 
-  // Scroll to bottom when a new message is added, unless user has scrolled up
+  // Scroll to bottom when a new message is added, unless user has scrolled up.
+  // The first time a conversation opens, jump instantly so existing chats land
+  // at the bottom without the smooth-scroll animation.
   useEffect(() => {
+    if (!conversation) return
+    if (initialScrollDone.current !== conversation.id) {
+      initialScrollDone.current = conversation.id
+      bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+      return
+    }
     if (!userScrolledUp.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [conversation?.messages.length])
+  }, [conversation?.id, conversation?.messages.length])
 
   // Scroll during streaming — fires on every content update
   const lastMsgContent = conversation?.messages.at(-1)?.content

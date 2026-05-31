@@ -13,3 +13,6 @@ backend/server
 
 # OS
 .DS_Store
+
+# Internal product/strategy specs — not for the public repo
+docs/specs/

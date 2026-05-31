@@ -3,7 +3,6 @@ import { Box, Text, Avatar, Group, Image, CopyButton, ActionIcon, Tooltip, Badge
 import { IconCheck, IconCopy, IconRobot, IconUser, IconPencil, IconX } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import rehypeRaw from 'rehype-raw'
 import hljs from 'highlight.js'
 import type { Components } from 'react-markdown'
 import type { Message, MessageContent } from '@/types'
@@ -140,7 +139,6 @@ export function MessageBubble({ message, isStreaming, onEdit, tokens, dropped }:
           ) : (
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
               components={markdownComponents}
             >
               {textContent + (isStreaming ? '▋' : '')}
