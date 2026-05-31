@@ -49,8 +49,19 @@ export function Sidebar({ onToggle, onToggleLogs }: SidebarProps) {
       {/* Header */}
       <Group px="sm" py="xs" justify="space-between" style={{ flexShrink: 0 }}>
         <Group gap="xs">
-          <IconAccessPoint size={20} color="var(--mantine-color-violet-4)" />
-          <Text fw={700} size="lg">Relay</Text>
+          <IconAccessPoint size={20} color="var(--mantine-color-violet-4)" style={{ filter: 'drop-shadow(0 0 6px var(--mantine-color-violet-5))' }} />
+          <Text
+            fw={700}
+            size="lg"
+            style={{
+              background: 'linear-gradient(90deg, var(--mantine-color-violet-3), var(--mantine-color-blue-3))',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}
+          >
+            Relay
+          </Text>
         </Group>
         <Tooltip label="Collapse sidebar">
           <ActionIcon variant="subtle" onClick={onToggle}>

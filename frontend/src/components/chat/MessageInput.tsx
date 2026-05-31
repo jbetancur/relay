@@ -134,49 +134,45 @@ export function MessageInput({
 
   return (
     <Box className={classes.root}>
-      {/* Image previews */}
-      {images.length > 0 && (
-        <Group gap="xs" px="md" pt="xs">
-          {images.map((src, i) => (
-            <Box key={i} pos="relative">
-              <Image src={src} radius="sm" w={64} h={64} fit="cover" />
-              <CloseButton
-                size="xs"
-                style={{ position: 'absolute', top: -4, right: -4 }}
-                onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-              />
-            </Box>
-          ))}
-        </Group>
-      )}
+      <Box className={classes.pill}>
+        {/* Attachments inside pill */}
+        {(images.length > 0 || attachments.length > 0) && (
+          <Box className={classes.pillAttachments}>
+            <Group gap="xs">
+              {images.map((src, i) => (
+                <Box key={i} pos="relative">
+                  <Image src={src} radius="sm" w={56} h={56} fit="cover" />
+                  <CloseButton
+                    size="xs"
+                    style={{ position: 'absolute', top: -4, right: -4 }}
+                    onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
+                  />
+                </Box>
+              ))}
+              {attachments.map((att, i) => (
+                <Badge
+                  key={i}
+                  size="sm"
+                  variant="outline"
+                  color="violet"
+                  rightSection={
+                    <CloseButton
+                      size="xs"
+                      style={{ marginLeft: 2 }}
+                      onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+                    />
+                  }
+                >
+                  <Text size="xs" truncate maw={160}>{att.name}</Text>
+                </Badge>
+              ))}
+            </Group>
+          </Box>
+        )}
 
-      {/* File attachment chips */}
-      {attachments.length > 0 && (
-        <Group gap="xs" px="md" pt="xs">
-          {attachments.map((att, i) => (
-            <Badge
-              key={i}
-              size="sm"
-              variant="outline"
-              color="violet"
-              rightSection={
-                <CloseButton
-                  size="xs"
-                  style={{ marginLeft: 2 }}
-                  onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
-                />
-              }
-            >
-              <Text size="xs" truncate maw={160}>{att.name}</Text>
-            </Badge>
-          ))}
-        </Group>
-      )}
-
-      <Group gap="xs" p="sm" align="flex-end">
-        {/* Image attach (vision models only) */}
-        {supportsVision && (
-          <>
+        <Box className={classes.pillRow}>
+          {/* Hidden file inputs */}
+          {supportsVision && (
             <input
               ref={imageFileRef}
               type="file"
@@ -185,73 +181,76 @@ export function MessageInput({
               style={{ display: 'none' }}
               onChange={(e) => { handleImageFiles(e.target.files); e.target.value = '' }}
             />
+          )}
+          <input
+            ref={attachFileRef}
+            type="file"
+            accept=".txt,.md,.csv,.pdf,text/plain,text/markdown,text/csv,application/pdf"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => { handleAttachFiles(e.target.files); e.target.value = '' }}
+          />
+
+          {/* Left action buttons */}
+          {supportsVision && (
             <Tooltip label="Attach image">
               <ActionIcon
                 variant="subtle"
-                size="lg"
+                size="md"
                 onClick={() => imageFileRef.current?.click()}
                 disabled={disabled || streaming}
               >
-                <IconPhoto size={18} />
+                <IconPhoto size={16} />
               </ActionIcon>
             </Tooltip>
-          </>
-        )}
-
-        {/* Text / PDF attach — always available */}
-        <input
-          ref={attachFileRef}
-          type="file"
-          accept=".txt,.md,.csv,.pdf,text/plain,text/markdown,text/csv,application/pdf"
-          multiple
-          style={{ display: 'none' }}
-          onChange={(e) => { handleAttachFiles(e.target.files); e.target.value = '' }}
-        />
-        <Tooltip label={extracting > 0 ? 'Extracting…' : 'Attach file (txt, md, csv, pdf)'}>
-          <ActionIcon
-            variant="subtle"
-            size="lg"
-            onClick={() => attachFileRef.current?.click()}
-            disabled={disabled || streaming || extracting > 0}
-          >
-            {extracting > 0 ? <Loader size={16} /> : <IconPaperclip size={18} />}
-          </ActionIcon>
-        </Tooltip>
-
-        <Textarea
-          ref={inputRef}
-          className={classes.textarea}
-          placeholder={streaming ? 'Streaming… (Esc to stop)' : 'Message… (Shift+Enter for newline)'}
-          value={text}
-          onChange={(e) => setText(e.currentTarget.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          autosize
-          minRows={1}
-          maxRows={8}
-          disabled={disabled && !streaming}
-        />
-
-        {streaming ? (
-          <Tooltip label="Stop (Esc)">
-            <ActionIcon size="lg" variant="filled" color="red" onClick={onStop}>
-              <IconPlayerStop size={16} />
-            </ActionIcon>
-          </Tooltip>
-        ) : (
-          <Tooltip label="Send (Enter)">
+          )}
+          <Tooltip label={extracting > 0 ? 'Extracting…' : 'Attach file (txt, md, csv, pdf)'}>
             <ActionIcon
-              size="lg"
-              variant="filled"
-              color="violet"
-              disabled={disabled || !hasContent}
-              onClick={handleSend}
+              variant="subtle"
+              size="md"
+              onClick={() => attachFileRef.current?.click()}
+              disabled={disabled || streaming || extracting > 0}
             >
-              <IconSend size={16} />
+              {extracting > 0 ? <Loader size={14} /> : <IconPaperclip size={16} />}
             </ActionIcon>
           </Tooltip>
-        )}
-      </Group>
+
+          <Textarea
+            ref={inputRef}
+            className={classes.textarea}
+            placeholder={streaming ? 'Streaming… (Esc to stop)' : 'Message…'}
+            value={text}
+            onChange={(e) => setText(e.currentTarget.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            autosize
+            minRows={1}
+            maxRows={8}
+            disabled={disabled && !streaming}
+          />
+
+          {streaming ? (
+            <Tooltip label="Stop (Esc)">
+              <ActionIcon size="md" variant="filled" color="red" radius="xl" onClick={onStop}>
+                <IconPlayerStop size={14} />
+              </ActionIcon>
+            </Tooltip>
+          ) : (
+            <Tooltip label="Send (Enter)">
+              <ActionIcon
+                size="md"
+                variant="filled"
+                color="violet"
+                radius="xl"
+                disabled={disabled || !hasContent}
+                onClick={handleSend}
+              >
+                <IconSend size={14} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+        </Box>
+      </Box>
     </Box>
   )
 }
