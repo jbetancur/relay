@@ -85,7 +85,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
       if (defaultConn) setConnection(conv.id, defaultConn.id)
       navigate(`/c/${conv.id}`, { replace: true })
     }
-  }, [id, createConversation, navigate, getDefault, setConnection])
+  }, [id, createConversation, navigate, getDefault, setConnection, settings.defaultChatModel])
 
   const conversation = id && id !== 'new' ? getConversation(id) : undefined
   const { send, stop, regenerate, editAndResend, streaming, routing, error } = useChat(conversation)
@@ -174,13 +174,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
     prevArtifactCount.current = artifacts.length
   }, [artifacts.length])
 
-  if (!conversation) {
-    return (
-      <Center h="100dvh">
-        <Text c="dimmed">Loading…</Text>
-      </Center>
-    )
-  }
+  if (!conversation) return null
 
   return (
     <Box className={classes.root}>

@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { useConversationStore, useConnectionsStore } from '@/store'
+import { useConversationStore, useConnectionsStore, useSettingsStore } from '@/store'
 
 export function useKeyboardShortcuts(toggleSidebar: () => void, toggleLogs: () => void) {
   const navigate = useNavigate()
   const { createConversation, setConnection } = useConversationStore()
   const { getDefault } = useConnectionsStore()
+  const { settings } = useSettingsStore()
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -14,7 +15,7 @@ export function useKeyboardShortcuts(toggleSidebar: () => void, toggleLogs: () =
       // Cmd/Ctrl+K — new chat
       if (mod && e.key === 'k') {
         e.preventDefault()
-        const conv = createConversation()
+        const conv = createConversation(settings.defaultChatModel)
         const defaultConn = getDefault()
         if (defaultConn) setConnection(conv.id, defaultConn.id)
         navigate(`/c/${conv.id}`)
@@ -52,5 +53,5 @@ export function useKeyboardShortcuts(toggleSidebar: () => void, toggleLogs: () =
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigate, toggleSidebar, toggleLogs, createConversation, setConnection, getDefault])
+  }, [navigate, toggleSidebar, toggleLogs, createConversation, setConnection, getDefault, settings.defaultChatModel])
 }

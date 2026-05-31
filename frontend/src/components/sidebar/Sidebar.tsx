@@ -18,11 +18,12 @@ import {
   IconLayoutSidebarLeftCollapse,
   IconAccessPoint,
   IconTerminal2,
+  IconArchive,
 } from '@tabler/icons-react'
 import { useNavigate, useParams } from 'react-router'
 import { useState } from 'react'
 
-import { useConversationStore } from '@/store'
+import { useConversationStore, useSettingsStore } from '@/store'
 import { ConversationList } from './ConversationList'
 
 interface SidebarProps {
@@ -34,10 +35,12 @@ export function Sidebar({ onToggle, onToggleLogs }: SidebarProps) {
   const navigate = useNavigate()
   const { id } = useParams()
   const [search, setSearch] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
   const { createConversation } = useConversationStore()
+  const { settings } = useSettingsStore()
 
   function handleNew() {
-    const conv = createConversation()
+    const conv = createConversation(settings.defaultChatModel)
     navigate(`/c/${conv.id}`)
   }
 
@@ -68,17 +71,29 @@ export function Sidebar({ onToggle, onToggleLogs }: SidebarProps) {
       </Box>
 
       <Box px="sm" pb="xs" style={{ flexShrink: 0 }}>
-        <TextInput
-          placeholder="Search conversations..."
-          leftSection={<IconSearch size={14} />}
-          value={search}
-          onChange={(e) => setSearch(e.currentTarget.value)}
-          size="xs"
-        />
+        <Group gap={6} wrap="nowrap">
+          <TextInput
+            placeholder="Search title or messages..."
+            leftSection={<IconSearch size={14} />}
+            value={search}
+            onChange={(e) => setSearch(e.currentTarget.value)}
+            size="xs"
+            flex={1}
+          />
+          <Tooltip label={showArchived ? 'Show active' : 'Show archived'}>
+            <ActionIcon
+              variant={showArchived ? 'light' : 'subtle'}
+              color={showArchived ? 'violet' : 'gray'}
+              onClick={() => setShowArchived((v) => !v)}
+            >
+              <IconArchive size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
       </Box>
 
       <ScrollArea flex={1} px="sm">
-        <ConversationList search={search} activeId={id} />
+        <ConversationList search={search} activeId={id} showArchived={showArchived} />
       </ScrollArea>
 
       <Divider />

@@ -15,6 +15,8 @@ interface ConversationState {
   createConversation: (model?: string) => Conversation
   deleteConversation: (id: string) => void
   renameConversation: (id: string, title: string) => void
+  togglePinned: (id: string) => void
+  toggleArchived: (id: string) => void
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'createdAt'>) => Message
   updateLastAssistantMessage: (conversationId: string, content: string) => void
   setModel: (conversationId: string, model: string) => void
@@ -55,6 +57,22 @@ export const useConversationStore = create<ConversationState>()(
         set((s) => ({
           conversations: s.conversations.map((c) =>
             c.id === id ? { ...c, title, updatedAt: Date.now() } : c
+          ),
+        }))
+      },
+
+      togglePinned(id) {
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === id ? { ...c, pinned: !c.pinned } : c
+          ),
+        }))
+      },
+
+      toggleArchived(id) {
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === id ? { ...c, archived: !c.archived, pinned: false } : c
           ),
         }))
       },

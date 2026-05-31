@@ -113,6 +113,9 @@ export interface Conversation {
   // MCP servers active for this conversation; their tools are offered to the
   // model. Non-empty implies the agent (tool-calling) path for sends.
   mcpServerIds?: string[]
+  // Organization: pinned floats to the top; archived hides from the main list.
+  pinned?: boolean
+  archived?: boolean
 }
 
 // ── Models ────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Select, Loader, Switch, Stack, Group } from '@mantine/core'
+import { Select, Loader, Switch, Group } from '@mantine/core'
 import { useModels } from '@/hooks/useModels'
 import { useRecentModelsStore } from '@/store'
 
@@ -70,7 +70,7 @@ export function ModelSwitcher({ value, onChange, group = 'chat', connectionId }:
   }
 
   return (
-    <Stack gap={4}>
+    <Group gap="xs" wrap="nowrap" align="center">
       <Select
         data={data}
         value={value || null}
@@ -83,17 +83,15 @@ export function ModelSwitcher({ value, onChange, group = 'chat', connectionId }:
         styles={{ input: { fontFamily: 'monospace', fontSize: 12 } }}
       />
       {hasCollapsedVariants && (
-        <Group justify="flex-end" maw={260}>
-          <Switch
-            size="xs"
-            label="Show all versions"
-            checked={showAllVersions}
-            onChange={(e) => setShowAllVersions(e.currentTarget.checked)}
-            styles={{ label: { fontSize: 11 } }}
-          />
-        </Group>
+        <Switch
+          size="xs"
+          label="Show all versions"
+          checked={showAllVersions}
+          onChange={(e) => setShowAllVersions(e.currentTarget.checked)}
+          styles={{ label: { fontSize: 11 } }}
+        />
       )}
-    </Stack>
+    </Group>
   )
 }
 
