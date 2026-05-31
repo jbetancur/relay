@@ -206,6 +206,7 @@ export const useSettingsStore = create<SettingsState>()(
         contextReplyHeadroom: 1024,
         contextSummaryModel: '',
         contextWindowOverrides: {},
+        maxTokens: null,
       },
       updateSettings(patch) {
         set((s) => ({ settings: { ...s.settings, ...patch } }))
@@ -213,7 +214,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'relay-settings',
-      version: 5,
+      version: 6,
       migrate(state: unknown, version: number) {
         const root = (state ?? {}) as Record<string, unknown>
         const s = (root.settings ?? root) as Record<string, unknown>
@@ -242,6 +243,9 @@ export const useSettingsStore = create<SettingsState>()(
           s.contextReplyHeadroom ??= 1024
           s.contextSummaryModel ??= ''
           s.contextWindowOverrides ??= {}
+        }
+        if (version < 6) {
+          s.maxTokens ??= null
         }
         root.settings = s
         return root as unknown as SettingsState

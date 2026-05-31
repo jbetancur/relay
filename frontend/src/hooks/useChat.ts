@@ -177,6 +177,8 @@ export function useChat(conversation: Conversation | undefined) {
       const mcpServerIds = conversation.mcpServerIds ?? []
       const useAgent = settings.toolsEnabled || mcpServerIds.length > 0
 
+      const maxTokens = settings.maxTokens ?? undefined
+
       if (useAgent) {
         // #2 Tool-calling loop via the agent endpoint. Tool steps are shown as
         // a transient italic preamble; the final answer streams in after.
@@ -187,7 +189,7 @@ export function useChat(conversation: Conversation | undefined) {
         const abort = new AbortController()
         abortRef.current = abort
         try {
-          for await (const ev of api.agent.stream({ model, messages, mcpServerIds }, connectionId, abort.signal)) {
+          for await (const ev of api.agent.stream({ model, messages, mcpServerIds, max_tokens: maxTokens }, connectionId, abort.signal)) {
             if (ev.kind === 'content') {
               answer += ev.text
             } else if (ev.kind === 'tool_call') {
@@ -222,7 +224,7 @@ export function useChat(conversation: Conversation | undefined) {
         abortRef.current = abort
         try {
           for await (const chunk of api.chat.stream(
-            { model, messages, stream: true },
+            { model, messages, stream: true, ...(maxTokens ? { max_tokens: maxTokens } : {}) },
             connectionId,
             abort.signal
           )) {
@@ -250,7 +252,7 @@ export function useChat(conversation: Conversation | undefined) {
           const abort = new AbortController()
           abortRef.current = abort
           const res = await api.chat.complete(
-            { model, messages, stream: false },
+            { model, messages, stream: false, ...(maxTokens ? { max_tokens: maxTokens } : {}) },
             connectionId,
             abort.signal
           )

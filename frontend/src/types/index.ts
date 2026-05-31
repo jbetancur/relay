@@ -260,4 +260,5 @@ export interface AppSettings {
   contextReplyHeadroom: number
   contextSummaryModel: string
   contextWindowOverrides: Record<string, number>
+  maxTokens: number | null
 }

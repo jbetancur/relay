@@ -53,6 +53,7 @@ export function SettingsPage() {
       contextBudgetFraction: settings.contextBudgetFraction,
       contextReplyHeadroom: settings.contextReplyHeadroom,
       contextSummaryModel: settings.contextSummaryModel,
+      maxTokens: settings.maxTokens,
     },
   })
 
@@ -225,6 +226,17 @@ export function SettingsPage() {
                     />
                   </Stack>
                 )}
+
+                <NumberInput
+                  label="Max response tokens"
+                  description="Cap the length of each reply. Lower values produce shorter, more concise responses. Leave blank for the model's default (often very long)."
+                  value={form.values.maxTokens ?? ''}
+                  onChange={(v) => form.setFieldValue('maxTokens', typeof v === 'number' ? v : null)}
+                  min={64}
+                  step={256}
+                  placeholder="No limit"
+                  maw={260}
+                />
 
                 <Divider label="Appearance" labelPosition="left" />
 

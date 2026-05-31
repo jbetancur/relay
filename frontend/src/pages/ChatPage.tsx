@@ -76,6 +76,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
   const messagesRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const userScrolledUp = useRef(false)
 
   // Create conversation on /c/new
   useEffect(() => {
@@ -115,20 +116,38 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
     return { droppedIds, perMessageTokens }
   }, [conversation, contextStrategy, contextWindow, settings.contextBudgetFraction, settings.contextReplyHeadroom])
 
-  // Auto-scroll to bottom on new messages/streaming
+  // Scroll to bottom when a new message is added, unless user has scrolled up
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!userScrolledUp.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [conversation?.messages.length])
 
-  // Show scroll-to-bottom button when user scrolls up
+  // Scroll during streaming — fires on every content update
+  const lastMsgContent = conversation?.messages.at(-1)?.content
+  useEffect(() => {
+    if (streaming && !userScrolledUp.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+    }
+  }, [streaming, lastMsgContent])
+
+  // Reset userScrolledUp when streaming ends so next message auto-scrolls again
+  useEffect(() => {
+    if (!streaming) userScrolledUp.current = false
+  }, [streaming])
+
+  // Track whether the user has manually scrolled up during streaming
   const handleScroll = useCallback(() => {
     const el = messagesRef.current
     if (!el) return
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    setShowScrollBtn(distFromBottom > 120)
-  }, [])
+    const scrolledUp = distFromBottom > 120
+    setShowScrollBtn(scrolledUp)
+    if (streaming) userScrolledUp.current = scrolledUp
+  }, [streaming])
 
   function scrollToBottom() {
+    userScrolledUp.current = false
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
