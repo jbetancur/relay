@@ -141,7 +141,7 @@ export function MessageInput({
             <Group gap="xs">
               {images.map((src, i) => (
                 <Box key={i} pos="relative">
-                  <Image src={src} radius="sm" w={56} h={56} fit="cover" />
+                  <Image src={src} radius="sm" w={56} h={56} fit="cover" alt={`Image attachment ${i + 1}`} />
                   <CloseButton
                     size="xs"
                     style={{ position: 'absolute', top: -4, right: -4 }}
@@ -199,6 +199,7 @@ export function MessageInput({
                 size="md"
                 onClick={() => imageFileRef.current?.click()}
                 disabled={disabled || streaming}
+                aria-label="Attach image"
               >
                 <IconPhoto size={16} />
               </ActionIcon>
@@ -210,6 +211,7 @@ export function MessageInput({
               size="md"
               onClick={() => attachFileRef.current?.click()}
               disabled={disabled || streaming || extracting > 0}
+              aria-label={extracting > 0 ? 'Extracting file…' : 'Attach file'}
             >
               {extracting > 0 ? <Loader size={14} /> : <IconPaperclip size={16} />}
             </ActionIcon>
@@ -231,7 +233,7 @@ export function MessageInput({
 
           {streaming ? (
             <Tooltip label="Stop (Esc)">
-              <ActionIcon size="md" variant="filled" color="red" radius="xl" onClick={onStop}>
+              <ActionIcon size="md" variant="filled" color="red" radius="xl" onClick={onStop} aria-label="Stop generation">
                 <IconPlayerStop size={14} />
               </ActionIcon>
             </Tooltip>
@@ -244,6 +246,7 @@ export function MessageInput({
                 radius="xl"
                 disabled={disabled || !hasContent}
                 onClick={handleSend}
+                aria-label="Send message"
               >
                 <IconSend size={14} />
               </ActionIcon>

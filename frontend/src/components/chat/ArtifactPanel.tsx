@@ -50,6 +50,8 @@ export function ArtifactPanel({ artifacts, activeId, onSelectArtifact, onClose }
               className={classes.tab}
               data-active={a.id === active.id ? 'true' : 'false'}
               onClick={() => onSelectArtifact(a.id)}
+              aria-selected={a.id === active.id}
+              role="tab"
             >
               <IconCode size={12} />
               <span className={classes.tabLabel}>{a.title}</span>
@@ -57,7 +59,7 @@ export function ArtifactPanel({ artifacts, activeId, onSelectArtifact, onClose }
           ))}
         </div>
         <Tooltip label="Close panel">
-          <ActionIcon size="sm" variant="subtle" onClick={onClose}>
+          <ActionIcon size="sm" variant="subtle" onClick={onClose} aria-label="Close artifact panel">
             <IconX size={14} />
           </ActionIcon>
         </Tooltip>
@@ -73,6 +75,8 @@ export function ArtifactPanel({ artifacts, activeId, onSelectArtifact, onClose }
                 variant={view === 'preview' ? 'filled' : 'subtle'}
                 color={view === 'preview' ? 'violet' : 'gray'}
                 onClick={() => setView('preview')}
+                aria-label="Preview artifact"
+                aria-pressed={view === 'preview'}
               >
                 <IconBrowser size={13} />
               </ActionIcon>
@@ -83,6 +87,8 @@ export function ArtifactPanel({ artifacts, activeId, onSelectArtifact, onClose }
                 variant={view === 'code' ? 'filled' : 'subtle'}
                 color={view === 'code' ? 'violet' : 'gray'}
                 onClick={() => setView('code')}
+                aria-label="View source code"
+                aria-pressed={view === 'code'}
               >
                 <IconCode size={13} />
               </ActionIcon>
@@ -93,6 +99,7 @@ export function ArtifactPanel({ artifacts, activeId, onSelectArtifact, onClose }
               size="sm"
               variant="subtle"
               onClick={() => openInNewTab(active)}
+              aria-label="Open artifact in new tab"
             >
               <IconExternalLink size={13} />
             </ActionIcon>
@@ -128,6 +135,7 @@ function ArtifactPreview({ artifact }: { artifact: Artifact }) {
           variant="subtle"
           style={{ position: 'absolute', top: 6, right: 6, zIndex: 2 }}
           onClick={() => setKey((k) => k + 1)}
+          aria-label="Reload preview"
         >
           <IconRefresh size={12} />
         </ActionIcon>

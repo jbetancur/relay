@@ -52,6 +52,7 @@ const markdownComponents: Components = {
                     color={copied ? 'teal' : 'gray'}
                     onClick={copy}
                     className={classes.codeCopyBtn}
+                    aria-label={copied ? 'Copied' : 'Copy code'}
                   >
                     {copied ? <IconCheck size={11} /> : <IconCopy size={11} />}
                   </ActionIcon>
@@ -115,7 +116,7 @@ export function MessageBubble({ message, isStreaming, onEdit, tokens, dropped }:
         {images.length > 0 && (
           <Group gap="xs" mb="xs">
             {images.map((src, i) => (
-              <Image key={i} src={src} radius="sm" maw={200} mah={200} fit="contain" />
+              <Image key={i} src={src} radius="sm" maw={200} mah={200} fit="contain" alt={`Image ${i + 1}`} />
             ))}
           </Group>
         )}
@@ -131,6 +132,7 @@ export function MessageBubble({ message, isStreaming, onEdit, tokens, dropped }:
               maxRows={12}
               size="sm"
               autoFocus
+              aria-label="Edit message"
               styles={{ input: { background: 'transparent', border: 'none', padding: 0, color: 'inherit' } }}
             />
           ) : isUser ? (
@@ -165,19 +167,19 @@ export function MessageBubble({ message, isStreaming, onEdit, tokens, dropped }:
             editing ? (
               <>
                 <Tooltip label="Confirm (Enter)" withArrow>
-                  <ActionIcon size="xs" variant="subtle" color="teal" onClick={commitEdit}>
+                  <ActionIcon size="xs" variant="subtle" color="teal" onClick={commitEdit} aria-label="Confirm edit">
                     <IconCheck size={12} />
                   </ActionIcon>
                 </Tooltip>
                 <Tooltip label="Cancel (Esc)" withArrow>
-                  <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => setEditing(false)}>
+                  <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => setEditing(false)} aria-label="Cancel edit">
                     <IconX size={12} />
                   </ActionIcon>
                 </Tooltip>
               </>
             ) : (
               <Tooltip label="Edit message" withArrow>
-                <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => { setDraft(textContent); setEditing(true) }}>
+                <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => { setDraft(textContent); setEditing(true) }} aria-label="Edit message">
                   <IconPencil size={12} />
                 </ActionIcon>
               </Tooltip>
@@ -192,6 +194,7 @@ export function MessageBubble({ message, isStreaming, onEdit, tokens, dropped }:
                     variant="subtle"
                     color={copied ? 'teal' : 'gray'}
                     onClick={copy}
+                    aria-label={copied ? 'Copied' : 'Copy message'}
                   >
                     {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
                   </ActionIcon>

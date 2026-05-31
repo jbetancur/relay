@@ -51,7 +51,7 @@ export function ContextGauge({ usedTokens, contextWindow, strategy }: ContextGau
       w={260}
       label={`${usedTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens (${pct}%). ${STRATEGY_NOTE[strategy]}`}
     >
-      <Box style={{ cursor: 'default', minWidth: 96 }}>
+      <Box style={{ cursor: 'default', minWidth: 96 }} role="meter" aria-label={`Context usage: ${pct}%`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
         <Text size="xs" c="dimmed" ff="monospace" ta="right" mb={2}>
           {fmt(usedTokens)} / {fmt(contextWindow)} · {pct}%
         </Text>

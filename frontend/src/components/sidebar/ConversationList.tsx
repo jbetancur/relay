@@ -167,6 +167,7 @@ function ConversationItem({
           flex={1}
           mx={4}
           my={2}
+          aria-label="Conversation title"
           styles={{ input: { padding: '4px 8px' } }}
         />
       ) : (
@@ -197,7 +198,7 @@ function ConversationItem({
       {!editing && (
         <Menu shadow="md" width={170} position="bottom-end">
           <Menu.Target>
-            <ActionIcon variant="subtle" size="sm" mr={4}>
+            <ActionIcon variant="subtle" size="sm" mr={4} aria-label={`Options for ${conversation.title}`}>
               <IconDots size={14} />
             </ActionIcon>
           </Menu.Target>

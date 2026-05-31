@@ -181,7 +181,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
       {/* Top bar */}
       <Group className={classes.topbar} gap="sm">
         <Tooltip label="Toggle sidebar">
-          <ActionIcon variant="subtle" onClick={onToggleSidebar}>
+          <ActionIcon variant="subtle" onClick={onToggleSidebar} aria-label="Toggle sidebar">
             <IconLayoutSidebarLeftExpand size={18} />
           </ActionIcon>
         </Tooltip>
@@ -223,7 +223,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
             <Menu shadow="md" width={220} position="bottom-end">
               <Menu.Target>
                 <Tooltip label="Context strategy" withArrow>
-                  <ActionIcon variant="subtle" size="sm">
+                  <ActionIcon variant="subtle" size="sm" aria-label="Context strategy">
                     <IconAdjustmentsHorizontal size={15} />
                   </ActionIcon>
                 </Tooltip>
@@ -258,7 +258,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
         {canRegenerate && (
           <Group gap={2}>
             <Tooltip label="Regenerate response">
-              <ActionIcon variant="subtle" onClick={() => regenerate()}>
+              <ActionIcon variant="subtle" onClick={() => regenerate()} aria-label="Regenerate response">
                 <IconRefresh size={16} />
               </ActionIcon>
             </Tooltip>
@@ -266,7 +266,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
               <Menu shadow="md" width={240} position="bottom-end">
                 <Menu.Target>
                   <Tooltip label="Regenerate with another model">
-                    <ActionIcon variant="subtle">
+                    <ActionIcon variant="subtle" aria-label="Regenerate with another model">
                       <IconChevronDown size={14} />
                     </ActionIcon>
                   </Tooltip>
@@ -294,6 +294,8 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
               variant={artifactPanelOpen ? 'filled' : 'subtle'}
               color={artifactPanelOpen ? 'violet' : undefined}
               onClick={() => setArtifactPanelOpen((v) => !v)}
+              aria-label={artifactPanelOpen ? 'Hide artifacts' : 'Show artifacts'}
+              aria-expanded={artifactPanelOpen}
             >
               <IconLayoutColumns size={16} />
             </ActionIcon>
@@ -304,7 +306,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
           <Menu shadow="md" width={200} position="bottom-end">
             <Menu.Target>
               <Tooltip label="Export conversation">
-                <ActionIcon variant="subtle">
+                <ActionIcon variant="subtle" aria-label="Export conversation">
                   <IconDownload size={16} />
                 </ActionIcon>
               </Tooltip>
@@ -339,7 +341,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
         )}
 
         <Tooltip label="System prompt">
-          <ActionIcon variant="subtle" onClick={openSystem}>
+          <ActionIcon variant="subtle" onClick={openSystem} aria-label="System prompt">
             <IconTerminal2 size={18} />
           </ActionIcon>
         </Tooltip>
@@ -354,6 +356,9 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
             className={classes.messages}
             ref={messagesRef}
             onScroll={handleScroll}
+            aria-label="Chat messages"
+            aria-live="polite"
+            aria-relevant="additions"
           >
             {conversation.messages.length === 0 ? (
               <EmptyState
@@ -404,6 +409,7 @@ export function ChatPage({ onToggleSidebar }: ChatPageProps) {
               radius="xl"
               size="lg"
               onClick={scrollToBottom}
+              aria-label="Scroll to bottom"
             >
               <IconChevronDown size={18} />
             </ActionIcon>

@@ -64,7 +64,7 @@ export function Sidebar({ onToggle, onToggleLogs }: SidebarProps) {
           </Text>
         </Group>
         <Tooltip label="Collapse sidebar">
-          <ActionIcon variant="subtle" onClick={onToggle}>
+          <ActionIcon variant="subtle" onClick={onToggle} aria-label="Collapse sidebar">
             <IconLayoutSidebarLeftCollapse size={18} />
           </ActionIcon>
         </Tooltip>
@@ -96,6 +96,7 @@ export function Sidebar({ onToggle, onToggleLogs }: SidebarProps) {
               variant={showArchived ? 'light' : 'subtle'}
               color={showArchived ? 'violet' : 'gray'}
               onClick={() => setShowArchived((v) => !v)}
+              aria-label={showArchived ? 'Show active conversations' : 'Show archived conversations'}
             >
               <IconArchive size={16} />
             </ActionIcon>

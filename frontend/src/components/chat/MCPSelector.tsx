@@ -31,7 +31,13 @@ export function MCPSelector({ selectedIds, onChange }: MCPSelectorProps) {
       <Popover.Target>
         <Tooltip label="MCP tools" withArrow>
           <Indicator disabled={activeCount === 0} label={activeCount} size={16} color="violet">
-            <ActionIcon variant={activeCount > 0 ? 'light' : 'subtle'} color={activeCount > 0 ? 'violet' : 'gray'} onClick={toggle}>
+            <ActionIcon
+              variant={activeCount > 0 ? 'light' : 'subtle'}
+              color={activeCount > 0 ? 'violet' : 'gray'}
+              onClick={toggle}
+              aria-label={activeCount > 0 ? `MCP tools — ${activeCount} active` : 'MCP tools'}
+              aria-expanded={opened}
+            >
               <IconPlugConnected size={16} />
             </ActionIcon>
           </Indicator>
