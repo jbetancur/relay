@@ -14,13 +14,14 @@ import {
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import { IconDeviceFloppy, IconPlug, IconAdjustments, IconCoin, IconPlugConnected } from '@tabler/icons-react'
+import { IconDeviceFloppy, IconPlug, IconAdjustments, IconCoin, IconPlugConnected, IconRobot } from '@tabler/icons-react'
 import { useSearchParams } from 'react-router'
 import { useSettingsStore, useConnectionsStore } from '@/store'
 import { ModelSwitcher } from '@/components/chat/ModelSwitcher'
 import { ConnectionsTab } from '@/components/connections/ConnectionsTab'
 import { CostsTab } from '@/components/settings/CostsTab'
 import { MCPTab } from '@/components/settings/MCPTab'
+import { AgentsTab } from '@/components/settings/AgentsTab'
 import { SlotPicker } from '@/components/settings/SlotPicker'
 import type { RouteCategory, RouteSlot } from '@/types'
 import classes from './SettingsPage.module.css'
@@ -83,6 +84,9 @@ export function SettingsPage() {
             </Tabs.Tab>
             <Tabs.Tab value="mcp" leftSection={<IconPlugConnected size={14} />}>
               MCP
+            </Tabs.Tab>
+            <Tabs.Tab value="agents" leftSection={<IconRobot size={14} />}>
+              Agents
             </Tabs.Tab>
           </Tabs.List>
 
@@ -269,6 +273,10 @@ export function SettingsPage() {
 
           <Tabs.Panel value="mcp">
             <MCPTab />
+          </Tabs.Panel>
+
+          <Tabs.Panel value="agents">
+            <AgentsTab />
           </Tabs.Panel>
         </Tabs>
       </Box>

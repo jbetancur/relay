@@ -10,6 +10,7 @@ import (
 
 	"github.com/johnbetancur/vision/backend/internal/config"
 	"github.com/johnbetancur/vision/backend/internal/agent"
+	"github.com/johnbetancur/vision/backend/internal/agents"
 	"github.com/johnbetancur/vision/backend/internal/connections"
 	"github.com/johnbetancur/vision/backend/internal/db"
 	"github.com/johnbetancur/vision/backend/internal/documents"
@@ -42,9 +43,11 @@ func main() {
 	connStore := connections.NewStore(database)
 	usageStore := usage.NewStore(database)
 	mcpStore := mcpservers.NewStore(database)
+	agentsStore := agents.NewStore(database)
 	connHandler := connections.NewHandler(connStore, usageStore)
 	mcpHandler := mcpservers.NewHandler(mcpStore)
-	agentHandler := agent.NewHandler(cfg, connStore, mcpStore, tools.Default())
+	agentsHandler := agents.NewHandler(agentsStore)
+	agentHandler := agent.NewHandler(cfg, connStore, mcpStore, agentsStore, usageStore, tools.Default())
 
 	if apiBase := os.Getenv("API_BASE_URL"); apiBase != "" {
 		if err := connStore.Seed("Default", cfg.APIBaseURL, cfg.APIKey); err != nil {
@@ -87,6 +90,14 @@ func main() {
 		r.Put("/api/mcp-servers/{id}", mcpHandler.Update)
 		r.Delete("/api/mcp-servers/{id}", mcpHandler.Delete)
 		r.Get("/api/mcp-servers/{id}/tools", mcpHandler.Tools)
+
+		r.Get("/api/agents", agentsHandler.List)
+		r.Post("/api/agents", agentsHandler.Create)
+		r.Get("/api/agents/{id}", agentsHandler.Get)
+		r.Put("/api/agents/{id}", agentsHandler.Update)
+		r.Delete("/api/agents/{id}", agentsHandler.Delete)
+		r.Get("/api/agents/{id}/budgets", agentsHandler.GetBudgets)
+		r.Put("/api/agents/{id}/budgets", agentsHandler.UpsertBudget)
 
 		r.Handle("/api/v1/*", proxy.New(cfg, connStore, usageStore))
 	})

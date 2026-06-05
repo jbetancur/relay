@@ -33,8 +33,9 @@ func NewStore(db *sql.DB) *Store {
 
 // Record atomically upserts running totals for a connection and appends a
 // per-model usage event for cost/budget reporting. The model may be empty when
-// the upstream response omitted it.
-func (s *Store) Record(connectionID, model string, promptTokens, completionTokens int64) error {
+// the upstream response omitted it. agentID is "" for non-agent (proxy) traffic
+// and set when an agent run records usage, enabling per-agent period ceilings.
+func (s *Store) Record(connectionID, agentID, model string, promptTokens, completionTokens int64) error {
 	now := time.Now().UnixMilli()
 	if _, err := s.db.Exec(`
 		INSERT INTO connection_stats (connection_id, request_count, prompt_tokens, completion_tokens, updated_at)
@@ -49,10 +50,37 @@ func (s *Store) Record(connectionID, model string, promptTokens, completionToken
 	}
 
 	_, err := s.db.Exec(`
-		INSERT INTO usage_events (connection_id, model, prompt_tokens, completion_tokens, created_at)
-		VALUES (?, ?, ?, ?, ?)
-	`, connectionID, model, promptTokens, completionTokens, now)
+		INSERT INTO usage_events (connection_id, agent_id, model, prompt_tokens, completion_tokens, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, connectionID, agentID, model, promptTokens, completionTokens, now)
 	return err
+}
+
+// AgentUsageSince returns per-model token totals for one agent's usage at or
+// after sinceMillis. Backed by idx_usage_events_agent_created, so it is an
+// indexed range scan rather than a full-table aggregation. The caller converts
+// per-model tokens to USD via pricing (dual-cap: tokens are the reliable floor).
+func (s *Store) AgentUsageSince(agentID string, sinceMillis int64) ([]ModelUsage, error) {
+	rows, err := s.db.Query(`
+		SELECT model, COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0)
+		FROM usage_events
+		WHERE agent_id = ? AND created_at >= ?
+		GROUP BY model
+	`, agentID, sinceMillis)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ModelUsage
+	for rows.Next() {
+		var m ModelUsage
+		if err := rows.Scan(&m.Model, &m.PromptTokens, &m.CompletionTokens); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
 }
 
 // UsageByModel returns per-model token totals across all connections for events

@@ -53,9 +53,7 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 
 			req.Out.Header.Del("X-Relay-Connection-ID")
 
-			if apiKey != "" {
-				req.Out.Header.Set("Authorization", "Bearer "+apiKey)
-			}
+			req.Out.Header.Set("Authorization", "Bearer "+apiKey)
 
 			// Read the request body once: needed both for debug logging and to
 			// extract the model so usage can be attributed per-model.
@@ -146,7 +144,7 @@ func recordFromBody(res *http.Response, connID, reqModel string, usageStore *usa
 	if u.Usage.PromptTokens == 0 && u.Usage.CompletionTokens == 0 {
 		return
 	}
-	if err := usageStore.Record(connID, pickModel(u.Model, reqModel), u.Usage.PromptTokens, u.Usage.CompletionTokens); err != nil {
+	if err := usageStore.Record(connID, "", pickModel(u.Model, reqModel), u.Usage.PromptTokens, u.Usage.CompletionTokens); err != nil {
 		slog.Error("usage record error", "err", err)
 	}
 }
@@ -211,7 +209,7 @@ func (s *streamingInterceptor) extractAndRecord() {
 	if best.Usage.PromptTokens == 0 && best.Usage.CompletionTokens == 0 {
 		return
 	}
-	if err := s.usageStore.Record(s.connID, model, best.Usage.PromptTokens, best.Usage.CompletionTokens); err != nil {
+	if err := s.usageStore.Record(s.connID, "", model, best.Usage.PromptTokens, best.Usage.CompletionTokens); err != nil {
 		slog.Error("usage record (stream) error", "err", err)
 	}
 }

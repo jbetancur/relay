@@ -49,6 +49,56 @@ export interface LogEntry {
   attrs?: Record<string, unknown>
 }
 
+// ── Agents ────────────────────────────────────────────────────────────────────
+
+export interface Agent {
+  id: string
+  slug: string
+  name: string
+  model: string
+  instructions: string
+  connectionId?: string
+  mcpServerIds: string[]
+  builtinTools: string[]
+  maxRounds: number
+  maxTokensRun: number
+  maxCostRun: number
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AgentInput {
+  name: string
+  slug?: string
+  model: string
+  instructions: string
+  connectionId?: string
+  mcpServerIds: string[]
+  builtinTools: string[]
+  maxRounds: number
+  maxTokensRun: number
+  maxCostRun: number
+  enabled: boolean
+}
+
+export interface AgentBudget {
+  id: string
+  subjectType: string
+  subjectId: string
+  period: 'day' | 'month'
+  limitUsd: number
+  limitTokens: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AgentBudgetInput {
+  period: 'day' | 'month'
+  limitUsd: number
+  limitTokens: number
+}
+
 // ── MCP servers ───────────────────────────────────────────────────────────────
 
 export interface MCPServer {
@@ -113,6 +163,9 @@ export interface Conversation {
   // MCP servers active for this conversation; their tools are offered to the
   // model. Non-empty implies the agent (tool-calling) path for sends.
   mcpServerIds?: string[]
+  // Saved agent active for this conversation. When set, the agent drives model,
+  // instructions, tools, and caps — the loop always runs via the agent endpoint.
+  agentId?: string
   // Organization: pinned floats to the top; archived hides from the main list.
   pinned?: boolean
   archived?: boolean
@@ -176,6 +229,8 @@ export type AgentEvent =
   | { kind: 'content'; text: string }
   | { kind: 'tool_call'; payload: { name: string; args: string } }
   | { kind: 'tool_result'; payload: { name: string; result: string } }
+  | { kind: 'cost'; payload: { tokens: number; costUsd: number; costKnown: boolean } }
+  | { kind: 'budget_exceeded'; payload: { scope: 'run' | 'ceiling'; reason: string } }
   | { kind: 'error'; payload: { message: string } }
 
 // ── Image API ─────────────────────────────────────────────────────────────────

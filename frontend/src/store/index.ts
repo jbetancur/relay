@@ -23,6 +23,7 @@ interface ConversationState {
   setSystemPrompt: (conversationId: string, prompt: string) => void
   setContextStrategy: (conversationId: string, strategy: ContextStrategy | undefined) => void
   setMcpServers: (conversationId: string, ids: string[]) => void
+  setAgent: (conversationId: string, agentId: string | undefined) => void
   setConnection: (conversationId: string, connectionId: string | null) => void
   deleteLastMessages: (conversationId: string, count: number) => void
   truncateAfterMessage: (conversationId: string, messageId: string) => void
@@ -139,6 +140,14 @@ export const useConversationStore = create<ConversationState>()(
         set((s) => ({
           conversations: s.conversations.map((c) =>
             c.id === conversationId ? { ...c, mcpServerIds: ids } : c
+          ),
+        }))
+      },
+
+      setAgent(conversationId, agentId) {
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId ? { ...c, agentId } : c
           ),
         }))
       },

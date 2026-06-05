@@ -56,6 +56,19 @@ func (r *Registry) All() []Tool {
 	return out
 }
 
+// Subset returns the registered tools whose names are in the given list,
+// preserving the caller's intent to offer only a chosen set (e.g. an agent's
+// configured built-in tools). Unknown names are silently skipped.
+func (r *Registry) Subset(names []string) []Tool {
+	out := make([]Tool, 0, len(names))
+	for _, n := range names {
+		if t, ok := r.tools[n]; ok {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // Specs returns the tool specs to advertise to the model, or nil if empty.
 func (r *Registry) Specs() []ToolSpec {
 	if len(r.tools) == 0 {

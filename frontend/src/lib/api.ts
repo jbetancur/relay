@@ -6,6 +6,10 @@ import type {
   ImageGenerationRequest,
   ModelUsage,
   AgentEvent,
+  Agent,
+  AgentInput,
+  AgentBudget,
+  AgentBudgetInput,
 } from '@/types'
 
 const BASE = '/api'
@@ -39,8 +43,8 @@ async function request<T>(
 
 export const api = {
   models: {
-    list(connectionId?: string | null): Promise<ModelsResponse> {
-      return request('/v1/models', undefined, connectionId)
+    list(connectionId: string): Promise<ModelsResponse> {
+      return request(`/connections/${connectionId}/models`)
     },
     // Single-model metadata (probes the provider where supported).
     meta(connectionId: string, model: string): Promise<ModelMeta> {
@@ -113,11 +117,35 @@ export const api = {
     },
   },
 
+  agents: {
+    list(): Promise<Agent[]> {
+      return request<Agent[]>('/agents')
+    },
+    get(id: string): Promise<Agent> {
+      return request<Agent>(`/agents/${id}`)
+    },
+    create(input: AgentInput): Promise<Agent> {
+      return request<Agent>('/agents', { method: 'POST', body: JSON.stringify(input) })
+    },
+    update(id: string, input: AgentInput): Promise<Agent> {
+      return request<Agent>(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(input) })
+    },
+    remove(id: string): Promise<void> {
+      return request<void>(`/agents/${id}`, { method: 'DELETE' })
+    },
+    getBudgets(id: string): Promise<AgentBudget[]> {
+      return request<AgentBudget[]>(`/agents/${id}/budgets`)
+    },
+    upsertBudget(id: string, input: AgentBudgetInput): Promise<AgentBudget> {
+      return request<AgentBudget>(`/agents/${id}/budgets`, { method: 'PUT', body: JSON.stringify(input) })
+    },
+  },
+
   agent: {
     // Tool-calling chat. Yields either assistant text deltas or structured tool
     // step events so the UI can show "Searching…" / results inline.
     async *stream(
-      body: { model: string; messages: Array<{ role: string; content: unknown }>; mcpServerIds?: string[] },
+      body: { model: string; messages: Array<{ role: string; content: unknown }>; mcpServerIds?: string[]; agentId?: string },
       connectionId?: string | null,
       signal?: AbortSignal
     ): AsyncGenerator<AgentEvent> {
@@ -154,7 +182,7 @@ export const api = {
           if (!data) continue
           if (data === '[DONE]') return
 
-          if (event === 'tool_call' || event === 'tool_result' || event === 'error') {
+          if (event === 'tool_call' || event === 'tool_result' || event === 'cost' || event === 'budget_exceeded' || event === 'error') {
             try {
               yield { kind: event, payload: JSON.parse(data) }
             } catch {

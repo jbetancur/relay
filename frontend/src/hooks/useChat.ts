@@ -175,7 +175,11 @@ export function useChat(conversation: Conversation | undefined) {
       // this conversation has MCP servers selected. MCP servers' tools are
       // offered via mcpServerIds.
       const mcpServerIds = conversation.mcpServerIds ?? []
-      const useAgent = settings.toolsEnabled || mcpServerIds.length > 0
+      const agentId = conversation.agentId
+      // An active saved agent always uses the tool-calling loop (it may have
+      // instructions/caps even with no MCP tools). Tools or MCP servers alone
+      // also trigger the loop as before.
+      const useAgent = !!agentId || settings.toolsEnabled || mcpServerIds.length > 0
 
       const maxTokens = settings.maxTokens ?? undefined
 
@@ -188,19 +192,29 @@ export function useChat(conversation: Conversation | undefined) {
         let answer = ''
         const abort = new AbortController()
         abortRef.current = abort
+        let costLine = ''
         try {
-          for await (const ev of api.agent.stream({ model, messages, mcpServerIds, max_tokens: maxTokens }, connectionId, abort.signal)) {
+          for await (const ev of api.agent.stream({ model, messages, mcpServerIds, agentId, max_tokens: maxTokens }, connectionId, abort.signal)) {
             if (ev.kind === 'content') {
               answer += ev.text
             } else if (ev.kind === 'tool_call') {
               steps += `> 🔧 *Calling \`${ev.payload.name}\`…*\n\n`
             } else if (ev.kind === 'tool_result') {
               steps += `> ↳ *${ev.payload.name} returned.*\n\n`
+            } else if (ev.kind === 'cost') {
+              const { tokens, costUsd, costKnown } = ev.payload
+              costLine = costKnown
+                ? `> 💰 *$${costUsd.toFixed(4)} · ${tokens.toLocaleString()} tokens*\n\n`
+                : `> 💰 *${tokens.toLocaleString()} tokens*\n\n`
+            } else if (ev.kind === 'budget_exceeded') {
+              steps += `> 🛑 *Stopped: ${ev.payload.reason}*\n\n`
+              setError(`Budget limit reached — ${ev.payload.reason}`)
             } else if (ev.kind === 'error') {
               setError(ev.payload.message)
             }
-            // While tools run, show steps; once the answer starts, show only it.
-            updateLastAssistantMessage(conversation.id, answer || steps)
+            // While tools run, show steps + live cost; once the answer starts,
+            // show only it (with the cost meter still appended underneath).
+            updateLastAssistantMessage(conversation.id, answer ? answer + (costLine ? `\n\n${costLine}` : '') : steps + costLine)
           }
         } catch (e) {
           if ((e as Error).name !== 'AbortError') {

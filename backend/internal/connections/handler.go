@@ -126,9 +126,7 @@ func (h *Handler) Models(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("build request: %v", err))
 		return
 	}
-	if conn.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+conn.APIKey)
-	}
+	req.Header.Set("Authorization", "Bearer "+conn.APIKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
