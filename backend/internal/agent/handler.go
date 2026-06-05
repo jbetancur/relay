@@ -1,9 +1,7 @@
 // Package agent implements a tool-calling chat loop on top of any
 // OpenAI-compatible upstream. The frontend posts a normal chat request to
 // /api/agent/chat; the handler advertises server-side tools, runs tool calls in
-// a loop, and streams the final assistant message back as SSE (so the existing
-// frontend stream reader works unchanged). Intermediate tool calls/results are
-// emitted as custom SSE events so the UI can show "Searching the web…" steps.
+// a loop, and streams the final assistant message back as SSE.
 package agent
 
 import (
@@ -18,17 +16,19 @@ import (
 	"time"
 
 	"github.com/johnbetancur/vision/backend/internal/agents"
+	"github.com/johnbetancur/vision/backend/internal/budget"
 	"github.com/johnbetancur/vision/backend/internal/config"
 	"github.com/johnbetancur/vision/backend/internal/connections"
 	"github.com/johnbetancur/vision/backend/internal/governor"
+	"github.com/johnbetancur/vision/backend/internal/httputil"
 	"github.com/johnbetancur/vision/backend/internal/mcp"
 	"github.com/johnbetancur/vision/backend/internal/mcpservers"
 	"github.com/johnbetancur/vision/backend/internal/modelmeta"
+	"github.com/johnbetancur/vision/backend/internal/stringutil"
 	"github.com/johnbetancur/vision/backend/internal/tools"
 	"github.com/johnbetancur/vision/backend/internal/usage"
 )
 
-// defaultMaxRounds bounds the tool loop when no agent overrides it.
 const defaultMaxRounds = 5
 
 type Handler struct {
@@ -38,6 +38,7 @@ type Handler struct {
 	agentsStore *agents.Store
 	usageStore  *usage.Store
 	registry    *tools.Registry
+	budgetCheck *budget.Checker
 	client      *http.Client
 }
 
@@ -49,11 +50,11 @@ func NewHandler(cfg *config.Config, connStore *connections.Store, mcpStore *mcps
 		agentsStore: agentsStore,
 		usageStore:  usageStore,
 		registry:    registry,
+		budgetCheck: budget.NewChecker(agentsStore, usageStore),
 		client:      &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
-// upstreamMessage mirrors the OpenAI chat message shape, including tool calls.
 type upstreamMessage struct {
 	Role       string     `json:"role"`
 	Content    any        `json:"content"`
@@ -75,23 +76,20 @@ type agentRequest struct {
 	Model        string            `json:"model"`
 	Messages     []upstreamMessage `json:"messages"`
 	MCPServerIDs []string          `json:"mcpServerIds,omitempty"`
-	// AgentID (or slug) selects a saved agent. When set, the agent is the source
-	// of truth for model, instructions, tool set, and maxRounds; the request's
-	// Model/MCPServerIDs are ignored. When empty, the loop behaves as before.
-	AgentID string `json:"agentId,omitempty"`
+	AgentID      string            `json:"agentId,omitempty"`
 }
 
-// runConfig is the resolved per-request configuration after applying any agent.
+// runConfig is the resolved per-request configuration after applying any saved agent.
 type runConfig struct {
-	agentID      string // "" when no saved agent; attributes usage + ceilings
+	agentID      string
 	model        string
-	instructions string   // prepended as a stable system message (cache anchor)
-	mcpServerIDs []string // MCP servers to offer
-	builtinTools []string // built-in tool names to offer; nil = offer all (no agent)
+	instructions string
+	mcpServerIDs []string
+	builtinTools []string // nil = offer all (no agent)
 	maxRounds    int
-	maxTokensRun int64   // per-run token cap; 0 = off
-	maxCostRun   float64 // per-run USD cap; 0 = off
-	connectionID string  // optional agent-pinned connection
+	maxTokensRun int64
+	maxCostRun   float64
+	connectionID string
 }
 
 // Chat handles POST /api/agent/chat.
@@ -113,9 +111,6 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Resolve the run config from the optional saved agent. A bad agentId is a
-	// hard error (the caller asked for a specific agent); everything else falls
-	// back to request-level values.
 	cfg, err := h.resolveRunConfig(req)
 	if err != nil {
 		writeSSE(w, flusher, "error", map[string]string{"message": err.Error()})
@@ -123,28 +118,19 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upstream: an agent may pin a connection; otherwise use the request header.
 	connID := cfg.connectionID
 	if connID == "" {
 		connID = r.Header.Get("X-Relay-Connection-ID")
 	}
-	baseURL, apiKey := h.resolveUpstream(connID)
+	baseURL, apiKey, typeHint := h.resolveUpstream(connID)
 	if baseURL == "" {
 		writeSSE(w, flusher, "error", map[string]string{"message": "no upstream configured"})
 		writeDone(w, flusher)
 		return
 	}
 
-	// Cache-aware assembly: a stable system message (the agent's instructions)
-	// is prepended exactly once and stays at index 0, byte-identical across the
-	// conversation's turns, so provider prompt-caching anchors on it instead of
-	// re-billing a shifting prefix. We skip prepending if the request already
-	// leads with a system message (avoid double system blocks).
 	messages := assembleMessages(cfg.instructions, req.Messages)
 
-	// Build the per-request registry. With an agent, offer only its configured
-	// built-in tools + its MCP servers. Without an agent, preserve prior
-	// behavior: all built-in tools + the request's MCP servers.
 	var base []tools.Tool
 	if cfg.builtinTools == nil {
 		base = h.registry.All()
@@ -165,18 +151,14 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 	specs := registry.Specs()
 
-	// Cost governor: a per-run meter enforcing the agent's token/cost caps.
-	// Price is resolved once for the run's model; nil price ⇒ dollar cap inert,
-	// token cap still protects (see governor.RunMeter). meterConnID is the
-	// connection we attribute recorded usage to.
 	price := h.resolvePrice(ctx, connID, cfg.model)
 	meter := governor.NewRunMeter(price, cfg.maxTokensRun, cfg.maxCostRun)
 
-	// Pre-run ceiling gate: refuse to start a run that has already hit a period
-	// budget. Only applies to saved agents (per-agent ceilings); ad-hoc runs
-	// have no agent to attribute period usage to.
 	if cfg.agentID != "" {
-		if ok, reason := h.checkCeiling(ctx, cfg.agentID, connID); !ok {
+		priceFn := governor.PriceFunc(func(model string) *modelmeta.Price {
+			return h.resolvePrice(ctx, connID, model)
+		})
+		if ok, reason := h.budgetCheck.WithinCeiling(ctx, cfg.agentID, priceFn); !ok {
 			writeSSE(w, flusher, "budget_exceeded", map[string]string{"scope": "ceiling", "reason": reason})
 			writeDone(w, flusher)
 			return
@@ -184,42 +166,31 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for round := 0; round < cfg.maxRounds; round++ {
-		resp, contentStreamed, err := h.callUpstreamStream(ctx, baseURL, apiKey, cfg.model, messages, specs, w, flusher)
+		resp, contentStreamed, err := h.callUpstreamStream(ctx, baseURL, apiKey, typeHint, cfg.model, messages, specs, w, flusher)
 		if err != nil {
 			writeSSE(w, flusher, "error", map[string]string{"message": err.Error()})
 			writeDone(w, flusher)
 			return
 		}
 
-		// Meter every round (tool-call rounds and the final answer alike): record
-		// usage so agent runs are no longer invisible to cost tracking, feed the
-		// run meter, and stream the live cost to the UI.
 		h.meterRound(connID, cfg.agentID, cfg.model, resp, meter, w, flusher)
 
 		choice := resp.Choices[0].Message
 
-		// No tool calls → this is the final answer. Content was already streamed
-		// live by callUpstreamStream; just close out.
 		if len(choice.ToolCalls) == 0 {
 			if !contentStreamed {
-				// Fallback: upstream didn't stream content (e.g. tool-call-only round
-				// with no content), emit whatever the buffered response holds.
 				streamText(w, flusher, contentString(choice.Content))
 			}
 			writeDone(w, flusher)
 			return
 		}
 
-		// A per-run cap may have tripped on this round's usage. Stop after we've
-		// delivered any final answer above, but before spending another round on
-		// more tool calls.
 		if stop, reason := meter.Exceeded(); stop {
 			writeSSE(w, flusher, "budget_exceeded", map[string]string{"scope": "run", "reason": reason})
 			writeDone(w, flusher)
 			return
 		}
 
-		// Append the assistant's tool-call message, then execute each call.
 		messages = append(messages, choice)
 		for _, tc := range choice.ToolCalls {
 			writeSSE(w, flusher, "tool_call", map[string]string{
@@ -229,7 +200,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 			result := registry.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
 			writeSSE(w, flusher, "tool_result", map[string]string{
 				"name":   tc.Function.Name,
-				"result": truncate(result, 2000),
+				"result": stringutil.Truncate(result, 2000),
 			})
 			messages = append(messages, upstreamMessage{
 				Role:       "tool",
@@ -240,21 +211,18 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Ran out of rounds without a final answer.
 	writeSSE(w, flusher, "error", map[string]string{"message": "tool loop exceeded max rounds"})
 	writeDone(w, flusher)
 }
 
 // resolveRunConfig applies the optional saved agent to produce the effective run
-// configuration. With no agentId, it returns the request's own values and
-// builtinTools=nil (a sentinel meaning "offer all built-in tools", preserving
-// pre-agent behavior). With an agentId, the agent is authoritative.
+// configuration. With no agentId, builtinTools=nil means "offer all built-in tools".
 func (h *Handler) resolveRunConfig(req agentRequest) (runConfig, error) {
 	if req.AgentID == "" {
 		return runConfig{
 			model:        req.Model,
 			mcpServerIDs: req.MCPServerIDs,
-			builtinTools: nil, // offer all
+			builtinTools: nil,
 			maxRounds:    defaultMaxRounds,
 		}, nil
 	}
@@ -264,7 +232,6 @@ func (h *Handler) resolveRunConfig(req agentRequest) (runConfig, error) {
 		return runConfig{}, fmt.Errorf("load agent: %w", err)
 	}
 	if a == nil {
-		// Accept a slug as well as an id.
 		if a, err = h.agentsStore.GetBySlug(req.AgentID); err != nil {
 			return runConfig{}, fmt.Errorf("load agent: %w", err)
 		}
@@ -280,13 +247,12 @@ func (h *Handler) resolveRunConfig(req agentRequest) (runConfig, error) {
 	if rounds <= 0 {
 		rounds = defaultMaxRounds
 	}
-	// builtinTools is non-nil here (possibly empty), so only the agent's chosen
-	// built-in tools are offered.
 	builtin := a.BuiltinTools
 	if builtin == nil {
 		builtin = []string{}
 	}
 	return runConfig{
+		agentID:      a.ID,
 		model:        a.Model,
 		instructions: a.Instructions,
 		mcpServerIDs: a.MCPServerIDs,
@@ -298,10 +264,8 @@ func (h *Handler) resolveRunConfig(req agentRequest) (runConfig, error) {
 	}, nil
 }
 
-// assembleMessages prepends the agent's instructions as a single leading system
-// message — the cache anchor. It is skipped when there are no instructions or
-// when the caller already supplied a leading system message, so the prefix
-// stays stable and is never duplicated.
+// assembleMessages prepends the agent's instructions as a stable system message
+// (cache anchor). Skipped when instructions are empty or a system message already leads.
 func assembleMessages(instructions string, msgs []upstreamMessage) []upstreamMessage {
 	if instructions == "" {
 		return msgs
@@ -315,10 +279,6 @@ func assembleMessages(instructions string, msgs []upstreamMessage) []upstreamMes
 	return out
 }
 
-// meterRound records the round's token usage (closing the gap where agent runs
-// were invisible to cost tracking), feeds the run meter, and streams a live cost
-// event to the UI. Missing usage (some providers omit it on tool-call rounds) is
-// tolerated: nothing is recorded and the meter is unchanged for that round.
 func (h *Handler) meterRound(connID, agentID, reqModel string, resp *upstreamResponse, meter *governor.RunMeter, w http.ResponseWriter, f http.Flusher) {
 	pt, ct := resp.Usage.PromptTokens, resp.Usage.CompletionTokens
 	if pt > 0 || ct > 0 {
@@ -339,10 +299,6 @@ func (h *Handler) meterRound(connID, agentID, reqModel string, resp *upstreamRes
 	})
 }
 
-// resolvePrice looks up per-model pricing for the run's connection. Returns nil
-// when pricing is unknown, which makes the dollar cap inert (token cap still
-// protects). An empty connID means "no specific connection"; we still attempt a
-// table lookup via an empty Conn so static pricing applies.
 func (h *Handler) resolvePrice(ctx context.Context, connID, model string) *modelmeta.Price {
 	mc := modelmeta.Conn{}
 	if connID != "" {
@@ -353,50 +309,8 @@ func (h *Handler) resolvePrice(ctx context.Context, connID, model string) *model
 	return modelmeta.Resolve(ctx, mc, model).Price
 }
 
-// checkCeiling evaluates the agent's period budgets against its recorded usage.
-// It bridges the handler's stores to the pure governor.CheckCeiling: budgets
-// come from the agents store, period usage from the indexed usage query, and
-// pricing from modelmeta (per-model, so a mixed-model period costs correctly).
-func (h *Handler) checkCeiling(ctx context.Context, agentID, connID string) (bool, string) {
-	rows, err := h.agentsStore.GetBudgets("agent", agentID)
-	if err != nil || len(rows) == 0 {
-		return true, "" // no budgets (or read error) ⇒ no ceiling
-	}
-	budgets := make([]governor.PeriodBudget, 0, len(rows))
-	for _, b := range rows {
-		budgets = append(budgets, governor.PeriodBudget{
-			Period:      b.Period,
-			LimitUSD:    b.LimitUSD,
-			LimitTokens: b.LimitTokens,
-		})
-	}
-
-	usageSince := func(sinceMillis int64) ([]governor.ModelTokens, error) {
-		mu, err := h.usageStore.AgentUsageSince(agentID, sinceMillis)
-		if err != nil {
-			return nil, err
-		}
-		out := make([]governor.ModelTokens, 0, len(mu))
-		for _, m := range mu {
-			out = append(out, governor.ModelTokens{
-				Model:            m.Model,
-				PromptTokens:     m.PromptTokens,
-				CompletionTokens: m.CompletionTokens,
-			})
-		}
-		return out, nil
-	}
-
-	price := func(model string) *modelmeta.Price {
-		return h.resolvePrice(ctx, connID, model)
-	}
-
-	return governor.CheckCeiling(budgets, time.Now(), usageSince, price)
-}
-
-// collectMCPTools connects to each selected, enabled MCP server and gathers its
-// tools. Failures are surfaced as SSE error events but don't abort the chat.
-// Returns the tools plus closers to run when the request finishes.
+// collectMCPTools connects to each selected MCP server and returns its tools.
+// Failures emit SSE error events but don't abort the chat.
 func (h *Handler) collectMCPTools(ctx context.Context, ids []string, w http.ResponseWriter, f http.Flusher) ([]tools.Tool, []func()) {
 	var collected []tools.Tool
 	var closers []func()
@@ -418,13 +332,13 @@ func (h *Handler) collectMCPTools(ctx context.Context, ids []string, w http.Resp
 	return collected, closers
 }
 
-func (h *Handler) resolveUpstream(connID string) (baseURL, apiKey string) {
+func (h *Handler) resolveUpstream(connID string) (baseURL, apiKey, typeHint string) {
 	if connID != "" {
 		if conn, err := h.connStore.GetByID(connID); err == nil && conn != nil && conn.Enabled {
-			return strings.TrimRight(conn.BaseURL, "/"), conn.APIKey
+			return httputil.NormalizeBaseURL(conn.BaseURL), conn.APIKey, string(conn.TypeHint)
 		}
 	}
-	return strings.TrimRight(h.cfg.APIBaseURL, "/"), h.cfg.APIKey
+	return httputil.NormalizeBaseURL(h.cfg.APIBaseURL), h.cfg.APIKey, ""
 }
 
 type upstreamResponse struct {
@@ -438,13 +352,9 @@ type upstreamResponse struct {
 	} `json:"usage"`
 }
 
-// callUpstreamStream calls the upstream with stream:true, forwards content
-// deltas to the client live, and accumulates tool-call deltas so the caller
-// can run the tool loop. Returns the reassembled response, whether any content
-// was streamed, and any error.
 func (h *Handler) callUpstreamStream(
 	ctx context.Context,
-	baseURL, apiKey, model string,
+	baseURL, apiKey, typeHint, model string,
 	messages []upstreamMessage,
 	specs []tools.ToolSpec,
 	w http.ResponseWriter,
@@ -466,9 +376,7 @@ func (h *Handler) callUpstreamStream(
 		return nil, false, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
-	}
+	httputil.SetProviderAuth(req, typeHint, apiKey)
 
 	resp, err := h.client.Do(req)
 	if err != nil {
@@ -488,7 +396,7 @@ func (h *Handler) callUpstreamStream(
 		name     string
 		argsBuf  strings.Builder
 	}
-	var tcMap []tcAccum // indexed by delta tool_calls[].index
+	var tcMap []tcAccum
 
 	var contentBuf strings.Builder
 	var contentStreamed bool
@@ -599,10 +507,8 @@ func (h *Handler) callUpstreamStream(
 	return assembled, contentStreamed, nil
 }
 
-// ── SSE helpers ─────────────────────────────────────────────────────────────
+// ── SSE helpers ──────────────────────────────────────────────────────────────
 
-// streamText emits the final answer as OpenAI-style content deltas so the
-// existing frontend stream parser (which reads choices[0].delta.content) works.
 func streamText(w http.ResponseWriter, f http.Flusher, text string) {
 	chunk := map[string]any{
 		"object":  "chat.completion.chunk",
@@ -613,7 +519,6 @@ func streamText(w http.ResponseWriter, f http.Flusher, text string) {
 	f.Flush()
 }
 
-// writeSSE emits a named event with a JSON payload for the UI's step display.
 func writeSSE(w http.ResponseWriter, f http.Flusher, event string, payload any) {
 	b, _ := json.Marshal(payload)
 	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
@@ -635,11 +540,4 @@ func contentString(content any) string {
 		b, _ := json.Marshal(v)
 		return string(b)
 	}
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
 }

@@ -1,0 +1,62 @@
+{
+  "name": "relay-vscode",
+  "displayName": "Relay",
+  "description": "Auto-routes your prompt to the best model via Relay",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": ["AI", "Chat"],
+  "activationEvents": ["onChatParticipant:relay.chat"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "relay.chat",
+        "name": "relay",
+        "fullName": "Relay",
+        "description": "Auto-routes your prompt to the best model (local → mid → frontier)",
+        "isSticky": true
+      }
+    ],
+    "commands": [
+      {
+        "command": "relay.setToken",
+        "title": "Relay: Set Auth Token"
+      }
+    ],
+    "configuration": {
+      "title": "Relay",
+      "properties": {
+        "relay.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "URL of your Relay backend"
+        },
+        "relay.connectionId": {
+          "type": "string",
+          "default": "",
+          "description": "Optional: pin to a specific connection ID (blank = let Relay decide)"
+        },
+        "relay.showRoutingReason": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show which model was chosen and why before the response"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "npm run build -- --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "npm run build -- --minify && vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.93.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0"
+  }
+}

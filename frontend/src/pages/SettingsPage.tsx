@@ -22,16 +22,7 @@ import { ConnectionsTab } from '@/components/connections/ConnectionsTab'
 import { CostsTab } from '@/components/settings/CostsTab'
 import { MCPTab } from '@/components/settings/MCPTab'
 import { AgentsTab } from '@/components/settings/AgentsTab'
-import { SlotPicker } from '@/components/settings/SlotPicker'
-import type { RouteCategory, RouteSlot } from '@/types'
 import classes from './SettingsPage.module.css'
-
-const ROUTE_SLOTS: Array<{ key: RouteCategory; label: string; hint: string }> = [
-  { key: 'fast', label: 'Fast', hint: 'Short Q&A and simple tasks. Also used as the classifier that routes every prompt.' },
-  { key: 'coding', label: 'Coding', hint: 'Code generation, debugging, refactoring.' },
-  { key: 'creative', label: 'Creative', hint: 'Writing, stories, brainstorming, tone.' },
-  { key: 'reasoning', label: 'Reasoning', hint: 'Math, logic, analysis, multi-step problems.' },
-]
 
 export function SettingsPage() {
   const { settings, updateSettings } = useSettingsStore()
@@ -47,8 +38,6 @@ export function SettingsPage() {
       theme: settings.theme,
       streamingEnabled: settings.streamingEnabled,
       autoRouteEnabled: settings.autoRouteEnabled,
-      routeSlots: settings.routeSlots,
-      routeFallback: settings.routeFallback,
       toolsEnabled: settings.toolsEnabled,
       contextStrategy: settings.contextStrategy,
       contextBudgetFraction: settings.contextBudgetFraction,
@@ -139,40 +128,10 @@ export function SettingsPage() {
 
                 <Switch
                   label="Smart model routing"
-                  description="A classifier sorts each prompt into a category and sends it to that category's model — across any of your connections."
+                  description="Automatically picks the best model for each prompt — local models for simple tasks, stronger models for complex ones. No configuration needed; the backend scores complexity from your prompt and available connections."
                   checked={form.values.autoRouteEnabled}
                   onChange={(e) => form.setFieldValue('autoRouteEnabled', e.currentTarget.checked)}
                 />
-
-                {form.values.autoRouteEnabled && (
-                  <Stack gap="lg">
-                    {ROUTE_SLOTS.map(({ key, label, hint }) => (
-                      <SlotPicker
-                        key={key}
-                        label={label}
-                        hint={hint}
-                        value={form.values.routeSlots[key]}
-                        onChange={(slot: RouteSlot | undefined) =>
-                          form.setFieldValue('routeSlots', {
-                            ...form.values.routeSlots,
-                            [key]: slot,
-                          })
-                        }
-                      />
-                    ))}
-                    <Select
-                      label="Fallback"
-                      description="Used when the classifier can't decide or its connection is unavailable."
-                      data={[
-                        { value: 'conversation', label: "Conversation's current model" },
-                        { value: 'fast', label: 'Fast slot' },
-                      ]}
-                      value={form.values.routeFallback}
-                      onChange={(v) => v && form.setFieldValue('routeFallback', v as 'conversation' | 'fast')}
-                      maw={320}
-                    />
-                  </Stack>
-                )}
 
                 <Divider label="Context" labelPosition="left" />
 

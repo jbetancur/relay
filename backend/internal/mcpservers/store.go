@@ -1,13 +1,13 @@
 package mcpservers
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/johnbetancur/vision/backend/internal/idgen"
 )
 
 type Store struct {
@@ -16,12 +16,6 @@ type Store struct {
 
 func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
-}
-
-func newID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }
 
 // List returns all servers WITHOUT headers (write-only, like connection keys).
@@ -73,11 +67,11 @@ func (s *Store) Create(input MCPServerInput) (*MCPServer, error) {
 		return nil, err
 	}
 	now := time.Now().UnixMilli()
-	id := newID()
+	id := idgen.New()
 	_, err := s.db.Exec(`
 		INSERT INTO mcp_servers (id, name, url, headers, enabled, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		id, input.Name, input.URL, marshalHeaders(input.Headers), boolToInt(input.Enabled), now, now)
+		id, input.Name, input.URL, marshalHeaders(input.Headers), idgen.BoolToInt(input.Enabled), now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +86,7 @@ func (s *Store) Update(id string, input MCPServerInput) (*MCPServer, error) {
 	now := time.Now().UnixMilli()
 	res, err := s.db.Exec(`
 		UPDATE mcp_servers SET name=?, url=?, headers=?, enabled=?, updated_at=? WHERE id=?`,
-		input.Name, input.URL, marshalHeaders(input.Headers), boolToInt(input.Enabled), now, id)
+		input.Name, input.URL, marshalHeaders(input.Headers), idgen.BoolToInt(input.Enabled), now, id)
 	if err != nil {
 		return nil, err
 	}
@@ -151,11 +145,4 @@ func marshalHeaders(m map[string]string) string {
 		return "{}"
 	}
 	return string(b)
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }

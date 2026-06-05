@@ -18,6 +18,7 @@ import (
 	"github.com/johnbetancur/vision/backend/internal/mcpservers"
 	"github.com/johnbetancur/vision/backend/internal/middleware"
 	"github.com/johnbetancur/vision/backend/internal/proxy"
+	"github.com/johnbetancur/vision/backend/internal/router"
 	"github.com/johnbetancur/vision/backend/internal/tools"
 	"github.com/johnbetancur/vision/backend/internal/usage"
 )
@@ -47,6 +48,7 @@ func main() {
 	connHandler := connections.NewHandler(connStore, usageStore)
 	mcpHandler := mcpservers.NewHandler(mcpStore)
 	agentsHandler := agents.NewHandler(agentsStore)
+	routerHandler := router.NewHandler(connStore, agentsStore, usageStore)
 	agentHandler := agent.NewHandler(cfg, connStore, mcpStore, agentsStore, usageStore, tools.Default())
 
 	if apiBase := os.Getenv("API_BASE_URL"); apiBase != "" {
@@ -81,6 +83,7 @@ func main() {
 		r.Get("/api/usage/by-model", connHandler.UsageByModel)
 		r.Post("/api/documents/extract", documents.Extract)
 		r.Post("/api/agent/chat", agentHandler.Chat)
+		r.Post("/api/route", routerHandler.Route)
 		r.Get("/api/logs/stream", logHub.Stream)
 
 		r.Get("/api/mcp-servers", mcpHandler.List)

@@ -8,6 +8,7 @@ import {
   Button,
   Group,
   Alert,
+  Text,
 } from '@mantine/core'
 import { IconCheck, IconAlertCircle } from '@tabler/icons-react'
 import { useForm } from '@mantine/form'
@@ -15,12 +16,40 @@ import type { Connection, ConnectionInput, ConnectionTypeHint } from '@/types'
 
 type TestResult = { ok: true } | { ok: false; message: string }
 
-const TYPE_OPTIONS: { value: ConnectionTypeHint; label: string }[] = [
-  { value: 'openai', label: 'OpenAI-compatible' },
-  { value: 'ollama', label: 'Ollama' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'custom', label: 'Custom' },
-]
+const PROVIDER_DEFAULTS: Record<
+  ConnectionTypeHint,
+  { label: string; baseUrl: string; keyPlaceholder: string; keyRequired: boolean }
+> = {
+  openai: {
+    label: 'OpenAI',
+    baseUrl: 'https://api.openai.com',
+    keyPlaceholder: 'sk-…',
+    keyRequired: true,
+  },
+  anthropic: {
+    label: 'Anthropic',
+    baseUrl: 'https://api.anthropic.com',
+    keyPlaceholder: 'sk-ant-…',
+    keyRequired: true,
+  },
+  ollama: {
+    label: 'Ollama',
+    baseUrl: 'http://localhost:11434',
+    keyPlaceholder: '(not required)',
+    keyRequired: false,
+  },
+  custom: {
+    label: 'Custom / OpenAI-compatible',
+    baseUrl: '',
+    keyPlaceholder: 'API key (leave empty if not required)',
+    keyRequired: false,
+  },
+}
+
+const TYPE_OPTIONS = Object.entries(PROVIDER_DEFAULTS).map(([value, { label }]) => ({
+  value: value as ConnectionTypeHint,
+  label,
+}))
 
 interface ConnectionFormProps {
   initial?: Connection
@@ -33,7 +62,7 @@ export function ConnectionForm({ initial, onSubmit, onCancel, loading }: Connect
   const form = useForm<ConnectionInput>({
     initialValues: {
       name: initial?.name ?? '',
-      baseUrl: initial?.baseUrl ?? '',
+      baseUrl: initial?.baseUrl ?? PROVIDER_DEFAULTS.openai.baseUrl,
       apiKey: initial?.apiKey ?? '',
       typeHint: initial?.typeHint ?? 'openai',
       enabled: initial?.enabled ?? true,
@@ -50,6 +79,21 @@ export function ConnectionForm({ initial, onSubmit, onCancel, loading }: Connect
 
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<TestResult | null>(null)
+
+  function handleTypeChange(value: string | null) {
+    const type = (value ?? 'openai') as ConnectionTypeHint
+    const defaults = PROVIDER_DEFAULTS[type]
+    form.setFieldValue('typeHint', type)
+    // Only auto-fill baseUrl when it's a known provider (not custom)
+    if (type !== 'custom') {
+      form.setFieldValue('baseUrl', defaults.baseUrl)
+    }
+    // Auto-fill name if the user hasn't set one yet
+    if (!form.values.name.trim()) {
+      form.setFieldValue('name', defaults.label)
+    }
+    setTestResult(null)
+  }
 
   async function handleTest() {
     setTesting(true)
@@ -73,34 +117,52 @@ export function ConnectionForm({ initial, onSubmit, onCancel, loading }: Connect
     }
   }
 
+  const provider = PROVIDER_DEFAULTS[form.values.typeHint]
+  const isKnownProvider = form.values.typeHint !== 'custom'
+
   return (
     <form onSubmit={form.onSubmit(onSubmit)}>
       <Stack gap="sm">
+        <Select
+          label="Provider"
+          data={TYPE_OPTIONS}
+          value={form.values.typeHint}
+          onChange={handleTypeChange}
+        />
+
         <TextInput
           label="Name"
-          placeholder="My OpenAI connection"
+          placeholder={provider.label}
           required
           {...form.getInputProps('name')}
         />
 
-        <TextInput
-          label="Base URL"
-          placeholder="https://api.openai.com"
-          required
-          description="The root URL of the OpenAI-compatible API (no /v1 suffix needed for routing, but include it if your provider requires it)"
-          {...form.getInputProps('baseUrl')}
-        />
+        {isKnownProvider ? (
+          <TextInput
+            label="Base URL"
+            value={form.values.baseUrl}
+            readOnly
+            styles={{ input: { color: 'var(--mantine-color-dimmed)' } }}
+            rightSection={
+              <Text size="xs" c="dimmed" pr="xs">
+                fixed
+              </Text>
+            }
+          />
+        ) : (
+          <TextInput
+            label="Base URL"
+            placeholder="https://my-provider.example.com"
+            required
+            description="Root URL of the OpenAI-compatible API (no /v1 suffix)"
+            {...form.getInputProps('baseUrl')}
+          />
+        )}
 
         <PasswordInput
           label="API key"
-          placeholder="sk-… (leave empty if not required)"
+          placeholder={provider.keyPlaceholder}
           {...form.getInputProps('apiKey')}
-        />
-
-        <Select
-          label="Provider type"
-          data={TYPE_OPTIONS}
-          {...form.getInputProps('typeHint')}
         />
 
         <Group grow>

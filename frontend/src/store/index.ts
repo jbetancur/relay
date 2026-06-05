@@ -205,8 +205,6 @@ export const useSettingsStore = create<SettingsState>()(
         theme: 'dark',
         streamingEnabled: true,
         autoRouteEnabled: false,
-        routeSlots: {},
-        routeFallback: 'conversation',
         priceOverrides: {},
         monthlyBudgetUSD: 0,
         toolsEnabled: false,
@@ -223,7 +221,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'relay-settings',
-      version: 6,
+      version: 7,
       migrate(state: unknown, version: number) {
         const root = (state ?? {}) as Record<string, unknown>
         const s = (root.settings ?? root) as Record<string, unknown>
@@ -255,6 +253,11 @@ export const useSettingsStore = create<SettingsState>()(
         }
         if (version < 6) {
           s.maxTokens ??= null
+        }
+        if (version < 7) {
+          // v7 moves all routing logic to the backend. Slot config is gone.
+          delete s.routeSlots
+          delete s.routeFallback
         }
         root.settings = s
         return root as unknown as SettingsState

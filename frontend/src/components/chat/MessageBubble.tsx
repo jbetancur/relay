@@ -148,9 +148,9 @@ export function MessageBubble({ message, isStreaming, onEdit, tokens, dropped }:
 
         <Box className={classes.actions}>
           {!isUser && message.route && (
-            <Tooltip label={`Routed to ${message.route.model}`} withArrow>
+            <Tooltip label={message.route.reason} withArrow>
               <Badge size="xs" variant="light" color="violet" radius="sm" style={{ textTransform: 'none' }}>
-                {message.route.category}
+                {message.route.tier} · {message.route.model}
               </Badge>
             </Tooltip>
           )}

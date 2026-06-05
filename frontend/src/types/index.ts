@@ -138,9 +138,9 @@ export interface Message {
   role: Role
   content: string | MessageContent[]
   createdAt: number
-  // #routing: when auto-routing picked this assistant turn's model, record the
-  // category + model so the UI can surface why. Absent on older/un-routed messages.
-  route?: { category: RouteCategory; model: string }
+  // When auto-routing picked this turn's model, record tier/model/reason so
+  // the UI can show why. Absent on un-routed messages.
+  route?: { tier: string; model: string; reason: string }
 }
 
 // #context: how the conversation history is trimmed before being sent upstream.
@@ -277,13 +277,23 @@ export interface ModelPriceOverride {
   output: number
 }
 
-// #3 Auto-routing: an LLM classifier picks a category per prompt; each category
-// maps to a model on any connection, so routing can span providers.
-export type RouteCategory = 'coding' | 'creative' | 'reasoning' | 'fast'
+// ── Auto-routing ─────────────────────────────────────────────────────────────
+// The backend POST /api/route owns all routing logic. The frontend only needs
+// to call it and display the result.
 
-export interface RouteSlot {
+export interface RouteRequest {
+  task: string
+  agentId?: string
+}
+
+export interface RouteResponse {
   model: string
-  connectionId: string | null // null = use the conversation's own connection
+  connectionId: string
+  tier: 'local' | 'mid' | 'frontier'
+  reason: string
+  confidence: number
+  classifierUsed: boolean
+  candidates: { connectionId: string; model: string; tier: string }[]
 }
 
 export interface AppSettings {
@@ -291,13 +301,7 @@ export interface AppSettings {
   defaultImageModel: string
   theme: 'light' | 'dark' | 'auto'
   streamingEnabled: boolean
-  // #3 Auto-routing: when on, a classifier sorts each prompt into a category and
-  // the message is sent to that category's configured model + connection.
   autoRouteEnabled: boolean
-  routeSlots: Partial<Record<RouteCategory, RouteSlot>>
-  // On classifier failure/timeout, fall back to the conversation's own model or
-  // the Fast slot.
-  routeFallback: 'conversation' | 'fast'
   // #9 Cost: per-model price overrides ($/1M tokens) and an optional monthly
   // budget in USD. Empty/zero budget means "no budget".
   priceOverrides: Record<string, ModelPriceOverride>

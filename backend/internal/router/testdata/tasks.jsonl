@@ -1,0 +1,31 @@
+{"task": "fix this typo in the comment", "charCount": 30, "fileCount": 1, "want": "local"}
+{"task": "rename this variable to userCount everywhere", "charCount": 45, "fileCount": 1, "want": "local"}
+{"task": "add a docstring to this function", "charCount": 35, "fileCount": 1, "want": "local"}
+{"task": "format this file", "charCount": 16, "fileCount": 1, "want": "local"}
+{"task": "explain what this regex does", "charCount": 30, "fileCount": 1, "want": "local"}
+{"task": "what is the difference between map and forEach here", "charCount": 50, "fileCount": 1, "want": "local"}
+{"task": "remove the unused import", "charCount": 24, "fileCount": 1, "want": "local"}
+{"task": "lint this and fix the warnings", "charCount": 30, "fileCount": 1, "want": "local"}
+{"task": "summarize what this module does", "charCount": 31, "fileCount": 1, "want": "local"}
+{"task": "add a comment explaining this loop", "charCount": 34, "fileCount": 1, "want": "local"}
+{"task": "what does this error message mean", "charCount": 33, "fileCount": 1, "want": "local"}
+{"task": "convert this to use const instead of let", "charCount": 40, "fileCount": 1, "want": "local"}
+{"task": "design a distributed rate limiter that handles clock skew across nodes", "charCount": 70, "fileCount": 1, "want": "frontier"}
+{"task": "fix the race condition in the connection pool", "charCount": 44, "fileCount": 2, "want": "frontier"}
+{"task": "architect a plugin system with sandboxed execution", "charCount": 50, "fileCount": 3, "want": "frontier"}
+{"task": "prove this scheduling algorithm is starvation-free and fix the deadlock", "charCount": 71, "fileCount": 2, "want": "frontier"}
+{"task": "audit this auth flow for security vulnerabilities", "charCount": 49, "fileCount": 4, "want": "frontier"}
+{"task": "design the data structure for an LRU cache with concurrency support", "charCount": 67, "fileCount": 1, "want": "frontier"}
+{"task": "migrate the storage layer to a distributed consensus protocol", "charCount": 61, "fileCount": 6, "want": "frontier", "hasDiff": true}
+{"task": "optimize performance of this hot path that shows up in the flame graph", "charCount": 70, "fileCount": 3, "want": "frontier"}
+{"task": "debug this deadlock that only happens under high concurrency", "charCount": 60, "fileCount": 2, "want": "frontier"}
+{"task": "add a null check before this dereference", "charCount": 40, "fileCount": 1, "want": "mid"}
+{"task": "write a unit test for the parseDate function", "charCount": 44, "fileCount": 1, "want": "mid"}
+{"task": "extract this block into a helper function", "charCount": 41, "fileCount": 1, "want": "mid"}
+{"task": "add pagination to the users endpoint", "charCount": 37, "fileCount": 2, "want": "mid"}
+{"task": "handle the empty-list case in this reducer", "charCount": 43, "fileCount": 1, "want": "mid"}
+{"task": "wire up the new settings field to the form", "charCount": 42, "fileCount": 3, "want": "mid"}
+{"task": "add retry with backoff to this http call", "charCount": 41, "fileCount": 1, "want": "mid"}
+{"task": "validate the request body in this handler", "charCount": 42, "fileCount": 1, "want": "mid"}
+{"task": "make this component responsive on mobile", "charCount": 40, "fileCount": 2, "want": "mid"}
+{"task": "update these three modules to use the new client", "charCount": 50, "fileCount": 4, "hasDiff": true, "want": "mid"}

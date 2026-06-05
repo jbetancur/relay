@@ -1,12 +1,12 @@
 package connections
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/johnbetancur/vision/backend/internal/idgen"
 )
 
 type Store struct {
@@ -15,12 +15,6 @@ type Store struct {
 
 func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
-}
-
-func newID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }
 
 func (s *Store) List() ([]Connection, error) {
@@ -75,7 +69,6 @@ func (s *Store) GetDefault() (*Connection, error) {
 		Scan(&c.ID, &c.Name, &c.BaseURL, &c.APIKey, &c.TypeHint,
 			&enabled, &isDefault, &c.CreatedAt, &c.UpdatedAt)
 	if err == sql.ErrNoRows {
-		// Fall back to any enabled connection
 		err = s.db.QueryRow(`
 			SELECT id, name, base_url, api_key, type_hint, enabled, is_default, created_at, updated_at
 			FROM connections WHERE enabled = 1 ORDER BY created_at ASC LIMIT 1`).
@@ -99,7 +92,7 @@ func (s *Store) Create(input ConnectionInput) (*Connection, error) {
 		return nil, err
 	}
 	now := time.Now().UnixMilli()
-	id := newID()
+	id := idgen.New()
 
 	if input.IsDefault {
 		if _, err := s.db.Exec(`UPDATE connections SET is_default = 0`); err != nil {
@@ -111,7 +104,7 @@ func (s *Store) Create(input ConnectionInput) (*Connection, error) {
 		INSERT INTO connections (id, name, base_url, api_key, type_hint, enabled, is_default, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, input.Name, input.BaseURL, input.APIKey, string(input.TypeHint),
-		boolToInt(input.Enabled), boolToInt(input.IsDefault), now, now)
+		idgen.BoolToInt(input.Enabled), idgen.BoolToInt(input.IsDefault), now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +129,7 @@ func (s *Store) Update(id string, input ConnectionInput) (*Connection, error) {
 		SET name=?, base_url=?, api_key=?, type_hint=?, enabled=?, is_default=?, updated_at=?
 		WHERE id=?`,
 		input.Name, input.BaseURL, input.APIKey, string(input.TypeHint),
-		boolToInt(input.Enabled), boolToInt(input.IsDefault), now, id)
+		idgen.BoolToInt(input.Enabled), idgen.BoolToInt(input.IsDefault), now, id)
 	if err != nil {
 		return nil, err
 	}
@@ -179,8 +172,6 @@ func (s *Store) Seed(name, baseURL, apiKey string) error {
 	return err
 }
 
-// normalize trims surrounding whitespace from free-text fields. Pasted API keys
-// and URLs commonly pick up trailing spaces or newlines that break auth.
 func normalize(input ConnectionInput) ConnectionInput {
 	input.Name = strings.TrimSpace(input.Name)
 	input.BaseURL = strings.TrimSpace(input.BaseURL)
@@ -196,11 +187,4 @@ func validate(input ConnectionInput) error {
 		return fmt.Errorf("baseUrl must start with http:// or https://")
 	}
 	return nil
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }

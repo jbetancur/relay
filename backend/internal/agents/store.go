@@ -1,14 +1,14 @@
 package agents
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/johnbetancur/vision/backend/internal/idgen"
 )
 
 // Store handles agent and budget persistence.
@@ -18,12 +18,6 @@ type Store struct {
 
 func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
-}
-
-func newID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }
 
 // ── Agents ───────────────────────────────────────────────────────────────────
@@ -41,7 +35,7 @@ func (s *Store) List() ([]Agent, error) {
 
 	var out []Agent
 	for rows.Next() {
-		a, err := scanAgent(rows)
+		a, err := scanAgentRow(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -60,7 +54,7 @@ func (s *Store) GetByID(id string) (*Agent, error) {
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	return a, err
+	return &a, err
 }
 
 func (s *Store) GetBySlug(slug string) (*Agent, error) {
@@ -73,7 +67,7 @@ func (s *Store) GetBySlug(slug string) (*Agent, error) {
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	return a, err
+	return &a, err
 }
 
 func (s *Store) Create(input AgentInput) (*Agent, error) {
@@ -86,7 +80,7 @@ func (s *Store) Create(input AgentInput) (*Agent, error) {
 		return nil, err
 	}
 	now := time.Now().UnixMilli()
-	id := newID()
+	id := idgen.New()
 	connID := nullableString(input.ConnectionID)
 	_, err = s.db.Exec(`
 		INSERT INTO agents
@@ -98,7 +92,7 @@ func (s *Store) Create(input AgentInput) (*Agent, error) {
 		marshalStringSlice(input.MCPServerIDs),
 		marshalStringSlice(input.BuiltinTools),
 		input.MaxRounds, input.MaxTokensRun, input.MaxCostRun,
-		boolToInt(input.Enabled), now, now)
+		idgen.BoolToInt(input.Enabled), now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +127,7 @@ func (s *Store) Update(id string, input AgentInput) (*Agent, error) {
 		marshalStringSlice(input.MCPServerIDs),
 		marshalStringSlice(input.BuiltinTools),
 		input.MaxRounds, input.MaxTokensRun, input.MaxCostRun,
-		boolToInt(input.Enabled), now, id)
+		idgen.BoolToInt(input.Enabled), now, id)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +180,6 @@ func (s *Store) UpsertBudget(subjectType, subjectID string, input BudgetInput) (
 	}
 	now := time.Now().UnixMilli()
 
-	// Check if one exists for this (type, id, period).
 	var existing Budget
 	err := s.db.QueryRow(`
 		SELECT id, subject_type, subject_id, period, limit_usd, limit_tokens, created_at, updated_at
@@ -196,7 +189,7 @@ func (s *Store) UpsertBudget(subjectType, subjectID string, input BudgetInput) (
 			&existing.LimitUSD, &existing.LimitTokens, &existing.CreatedAt, &existing.UpdatedAt)
 
 	if err == sql.ErrNoRows {
-		id := newID()
+		id := idgen.New()
 		_, err = s.db.Exec(`
 			INSERT INTO budgets (id, subject_type, subject_id, period, limit_usd, limit_tokens, created_at, updated_at)
 			VALUES (?,?,?,?,?,?,?,?)`,
@@ -255,7 +248,6 @@ func (s *Store) resolveSlug(supplied, name, currentID string) (string, error) {
 			return "", err
 		}
 		if existingID == currentID {
-			// Collision is with itself on update — keep it.
 			return candidate, nil
 		}
 		candidate = fmt.Sprintf("%s-%d", base, i)
@@ -317,18 +309,12 @@ func parseStringSlice(s string) []string {
 	return out
 }
 
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-type scannable interface {
+// scanner is satisfied by both *sql.Row and *sql.Rows.
+type scanner interface {
 	Scan(dest ...any) error
 }
 
-func scanAgent(r scannable) (Agent, error) {
+func scanAgentRow(r scanner) (Agent, error) {
 	var a Agent
 	var enabled int
 	var mcpJSON, builtinJSON string
@@ -345,23 +331,4 @@ func scanAgent(r scannable) (Agent, error) {
 	a.MCPServerIDs = parseStringSlice(mcpJSON)
 	a.BuiltinTools = parseStringSlice(builtinJSON)
 	return a, nil
-}
-
-func scanAgentRow(row *sql.Row) (*Agent, error) {
-	var a Agent
-	var enabled int
-	var mcpJSON, builtinJSON string
-	err := row.Scan(
-		&a.ID, &a.Slug, &a.Name, &a.Model, &a.Instructions, &a.ConnectionID,
-		&mcpJSON, &builtinJSON,
-		&a.MaxRounds, &a.MaxTokensRun, &a.MaxCostRun,
-		&enabled, &a.CreatedAt, &a.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	a.Enabled = enabled == 1
-	a.MCPServerIDs = parseStringSlice(mcpJSON)
-	a.BuiltinTools = parseStringSlice(builtinJSON)
-	return &a, nil
 }

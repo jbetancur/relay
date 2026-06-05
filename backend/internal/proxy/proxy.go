@@ -36,12 +36,14 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 			target := fallbackTarget
 			apiKey := cfg.APIKey
 
+			var typeHint connections.TypeHint
 			connID := req.In.Header.Get("X-Relay-Connection-ID")
 			if connID != "" {
 				if conn, err := connStore.GetByID(connID); err == nil && conn != nil && conn.Enabled {
 					if t, err := url.Parse(conn.BaseURL); err == nil {
 						target = t
 						apiKey = conn.APIKey
+						typeHint = conn.TypeHint
 					}
 				}
 			}
@@ -53,7 +55,15 @@ func New(cfg *config.Config, connStore *connections.Store, usageStore *usage.Sto
 
 			req.Out.Header.Del("X-Relay-Connection-ID")
 
-			req.Out.Header.Set("Authorization", "Bearer "+apiKey)
+			if typeHint == connections.TypeAnthropic {
+				req.Out.Header.Del("Authorization")
+				req.Out.Header.Set("x-api-key", apiKey)
+				if req.Out.Header.Get("anthropic-version") == "" {
+					req.Out.Header.Set("anthropic-version", "2023-06-01")
+				}
+			} else {
+				req.Out.Header.Set("Authorization", "Bearer "+apiKey)
+			}
 
 			// Read the request body once: needed both for debug logging and to
 			// extract the model so usage can be attributed per-model.

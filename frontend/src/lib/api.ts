@@ -10,6 +10,8 @@ import type {
   AgentInput,
   AgentBudget,
   AgentBudgetInput,
+  RouteRequest,
+  RouteResponse,
 } from '@/types'
 
 const BASE = '/api'
@@ -200,6 +202,12 @@ export const api = {
           }
         }
       }
+    },
+  },
+
+  route: {
+    resolve(req: RouteRequest): Promise<RouteResponse> {
+      return request<RouteResponse>('/route', { method: 'POST', body: JSON.stringify(req) })
     },
   },
 

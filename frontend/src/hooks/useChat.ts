@@ -1,12 +1,11 @@
 import { useState, useCallback, useRef } from 'react'
 import { api } from '@/lib/api'
 import { useConversationStore, useSettingsStore, useConnectionsStore } from '@/store'
-import { resolveRoute } from '@/lib/autoRoute'
 import { buildContext, resolveBudget, type ChatMsg } from '@/lib/contextWindow'
 import { resolveContextWindow } from '@/lib/contextWindows'
 import { getModelMeta } from '@/hooks/useModelMeta'
 import { messageText } from '@/hooks/useTokenCount'
-import type { Conversation, MessageContent, RouteCategory } from '@/types'
+import type { Conversation, MessageContent, RouteResponse } from '@/types'
 import type { FileAttachment } from '@/components/chat/MessageInput'
 
 // Condense dropped older messages into a single summary string via a cheap model.
@@ -107,25 +106,24 @@ export function useChat(conversation: Conversation | undefined) {
 
       addMessage(conversation.id, { role: 'user', content })
 
-      // #5 explicit override wins; otherwise #3 auto-routing may pick a model +
-      // connection (across providers); otherwise the conversation's own model.
-      let routed: { model: string; connectionId: string | null; category: RouteCategory } | null = null
+      // Explicit override wins; otherwise the backend router picks model +
+      // connection when autoRoute is on; otherwise use the conversation's model.
+      let routed: RouteResponse | null = null
       if (!modelOverride && settings.autoRouteEnabled) {
         setRouting(true)
         try {
-          routed = await resolveRoute(fullText, settings)
+          routed = await api.route.resolve({ task: fullText })
         } catch {
-          routed = null // any routing failure → fall through to conversation model
+          routed = null // routing failure → fall through to conversation model
         } finally {
           setRouting(false)
         }
       }
-      // A routed connection (when set) overrides the conversation's connection.
       const connectionId =
         routed?.connectionId ?? conversation.connectionId ?? getDefault()?.id ?? null
       const model =
         modelOverride || routed?.model || conversation.model || settings.defaultChatModel
-      const route = routed ? { category: routed.category, model: routed.model } : undefined
+      const route = routed ? { tier: routed.tier, model: routed.model, reason: routed.reason } : undefined
       const isFirstExchange = conversation.messages.length === 0
 
       // #context: trim history per the active strategy (per-chat override wins).
